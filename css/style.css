@@ -1,0 +1,546 @@
+/* ===========================
+   手冲咖啡模拟器 - Phase 2 Styles
+   =========================== */
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+:root {
+  --bg-deep: #1A0D08;
+  --bg-mid: #2C1810;
+  --bg-card: rgba(20,10,5,0.75);
+  --gold: #C8A951;
+  --gold-light: #E0C068;
+  --gold-dim: rgba(200,169,81,0.15);
+  --cream: #E8D5C4;
+  --text: #D4C4B0;
+  --muted: #9A8A7A;
+  --green: #8CB86A;
+  --red: #D06868;
+  --radius: 14px;
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.5);
+  --border-gold: 1px solid rgba(200,169,81,0.25);
+}
+
+body {
+  font-family: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background:
+    radial-gradient(ellipse at 50% 0%, #3A2010 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 20%, #2A1810 0%, transparent 50%),
+    radial-gradient(ellipse at 20% 80%, #1A0A04 0%, transparent 50%),
+    linear-gradient(180deg, #1A0D08 0%, #0D0604 100%);
+  min-height: 100vh;
+  color: var(--text);
+  display: flex;
+  justify-content: center;
+  padding: 12px;
+  background-attachment: fixed;
+}
+
+/* Subtle wood texture overlay */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background:
+    repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.003) 2px, rgba(255,255,255,0.003) 4px),
+    repeating-linear-gradient(90deg, transparent, transparent 1px, rgba(0,0,0,0.01) 1px, rgba(0,0,0,0.01) 2px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.container { max-width: 800px; width: 100%; position: relative; z-index: 1; }
+
+/* ---- Header ---- */
+.header {
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--bg-card); border-radius: var(--radius);
+  padding: 14px 22px; margin-bottom: 14px;
+  border: var(--border-gold); backdrop-filter: blur(10px);
+  box-shadow: var(--shadow-lg);
+}
+.header-logo { font-size: 20px; font-weight: 900; color: var(--gold); display: flex; align-items: center; gap: 8px;
+  text-shadow: 0 2px 8px rgba(200,169,81,0.3); letter-spacing: 1px; }
+.header-stats { display: flex; gap: 20px; font-size: 14px; }
+.header-stats span { color: var(--gold); font-weight: 700; font-size: 17px; }
+
+/* ---- Cards ---- */
+.card {
+  background: var(--bg-card); border-radius: var(--radius);
+  padding: 22px; margin-bottom: 14px;
+  border: var(--border-gold); box-shadow: var(--shadow-lg);
+  backdrop-filter: blur(10px);
+  transition: all 0.3s;
+}
+.card h2 { color: var(--gold); font-size: 16px; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+
+/* ---- Buttons ---- */
+.btn { padding: 10px 22px; border-radius: 8px; border: 1px solid var(--gold); cursor: pointer;
+  font-size: 14px; font-weight: 600; transition: all 0.25s; font-family: inherit;
+  letter-spacing: 0.5px; }
+.btn-gold { background: linear-gradient(135deg, #C8A951, #A88931); color: #1A0D08; border: none; }
+.btn-gold:hover { background: linear-gradient(135deg, #DAB963, #B89941); transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(200,169,81,0.35); }
+.btn-outline { background: transparent; color: var(--gold); }
+.btn-outline:hover { background: var(--gold-dim); }
+.btn-sm { padding: 7px 16px; font-size: 12px; }
+.btn-lg { padding: 14px 36px; font-size: 17px; }
+.btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; box-shadow: none; }
+
+/* ---- Tabs ---- */
+.tabs { display: flex; gap: 6px; margin-bottom: 14px; }
+.tab { padding: 8px 22px; border-radius: 20px; cursor: pointer; font-size: 13px; font-weight: 600;
+  border: 1px solid rgba(255,255,255,0.12); background: transparent; color: var(--muted);
+  transition: all 0.2s; font-family: inherit; }
+.tab.active { background: var(--gold); color: #1A0D08; border-color: var(--gold); }
+.tab:hover:not(.active) { border-color: rgba(200,169,81,0.4); color: var(--cream); }
+
+/* ---- Equipment Cards ---- */
+.egrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.ecard {
+  background: rgba(255,255,255,0.03); border-radius: 10px; padding: 14px;
+  border: 1px solid rgba(255,255,255,0.08); cursor: pointer;
+  transition: all 0.2s;
+}
+.ecard:hover { border-color: rgba(255,255,255,0.18); background: rgba(255,255,255,0.05); }
+.ecard.sel { border-color: var(--gold); background: var(--gold-dim); box-shadow: 0 0 16px rgba(200,169,81,0.15); }
+.ecard.locked { opacity: 0.4; cursor: not-allowed; }
+.ecard.locked:hover { border-color: rgba(255,255,255,0.08); background: rgba(255,255,255,0.03); }
+.ec-name { font-weight: 700; font-size: 14px; }
+.ec-tier { font-size: 11px; margin-top: 3px; }
+.ec-tier.basic { color: var(--muted); }
+.ec-tier.advanced { color: var(--gold); }
+.ec-effect { font-size: 12px; color: var(--green); margin-top: 5px; }
+.ec-meta { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+/* ---- Recipe Cards ---- */
+.rgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.rcard {
+  background: rgba(255,255,255,0.03); border-radius: 12px; padding: 18px;
+  border: 1px solid rgba(255,255,255,0.08); cursor: pointer;
+  transition: all 0.25s; text-align: center;
+}
+.rcard:hover { border-color: rgba(255,255,255,0.18); background: rgba(255,255,255,0.05); transform: translateY(-2px); }
+.rcard.sel { border-color: var(--gold); background: var(--gold-dim); box-shadow: 0 0 20px rgba(200,169,81,0.2); transform: translateY(-2px); }
+.rc-icon { font-size: 36px; margin-bottom: 6px; }
+.rc-name { font-size: 16px; font-weight: 700; color: var(--gold); }
+.rc-flavor { display: inline-block; padding: 3px 12px; border-radius: 12px; font-size: 11px; font-weight: 600; margin: 6px 0; }
+.rc-match { font-size: 11px; margin: 4px 0; }
+.rc-params { font-size: 11px; color: var(--muted); line-height: 1.6; }
+.rc-desc { font-size: 11px; color: var(--muted); margin-top: 6px; font-style: italic; }
+
+/* ---- Speed ---- */
+.speed-row { display: flex; gap: 12px; }
+.speed-opt {
+  flex: 1; padding: 14px; border-radius: 10px; text-align: center;
+  border: 1px solid rgba(255,255,255,0.12); cursor: pointer; transition: all 0.2s;
+}
+.speed-opt:hover { border-color: rgba(255,255,255,0.25); }
+.speed-opt.sel { border-color: var(--gold); background: var(--gold-dim); }
+.sp-icon { font-size: 28px; }
+.sp-name { font-size: 14px; font-weight: 700; margin-top: 4px; }
+.sp-time { font-size: 12px; color: var(--muted); }
+
+/* ---- Judge ---- */
+.judge-row { display: flex; align-items: center; gap: 18px; }
+.judge-avatar {
+  width: 72px; height: 72px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-size: 36px; border: 3px solid var(--gold); flex-shrink: 0;
+  background: radial-gradient(circle at 50% 40%, #5A4030, #2A1810);
+  box-shadow: 0 0 20px rgba(200,169,81,0.2);
+}
+.judge-info { flex: 1; }
+.judge-name { font-size: 20px; font-weight: 900; color: var(--cream); }
+.judge-title { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.flavor-tag { display: inline-block; padding: 5px 16px; border-radius: 20px; font-size: 13px; font-weight: 600; margin-top: 6px; }
+.judge-dialog { color: var(--muted); font-size: 13px; font-style: italic; margin-top: 10px; }
+
+/* ---- Brewing ---- */
+.brew-canvas-wrap {
+  background: var(--bg-card); border-radius: var(--radius); border: var(--border-gold);
+  overflow: hidden; margin-bottom: 12px; box-shadow: var(--shadow-lg);
+}
+.brew-canvas-wrap canvas { display: block; width: 100%; }
+.timer-box { text-align: center; padding: 6px; }
+.timer-display { font-size: 36px; font-weight: 900; color: var(--gold); font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 20px rgba(200,169,81,0.4); }
+.timer-display.timer-warn { color: #E0A855; }
+.timer-display.timer-danger { color: #E05555; text-shadow: 0 0 20px rgba(224,85,85,0.4); animation: pulse 0.8s infinite; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+.progress-bar { height: 3px; background: rgba(255,255,255,0.08); border-radius: 2px; margin: 0 20px 12px; overflow: hidden; }
+.progress-bar .fill { height: 100%; background: linear-gradient(90deg, var(--gold), var(--gold-light));
+  border-radius: 2px; transition: width 0.3s; }
+
+/* Brew Steps */
+.bsteps { display: flex; flex-direction: column; gap: 4px; padding: 0 20px 12px; }
+.bstep { display: flex; align-items: center; gap: 10px; padding: 8px 14px;
+  border-radius: 8px; background: rgba(255,255,255,0.02); font-size: 13px; }
+.bstep.active { background: var(--gold-dim); border: 1px solid rgba(200,169,81,0.25); }
+.bstep.done { opacity: 0.5; }
+.bs-icon { font-size: 18px; width: 28px; text-align: center; }
+.bs-info { flex: 1; display: flex; flex-direction: column; }
+.bs-info b { font-size: 13px; }
+.bs-info small { font-size: 11px; color: var(--muted); }
+.bs-time { font-size: 14px; font-weight: 700; color: var(--gold); }
+
+/* ---- Scoring ---- */
+.score-hero { text-align: center; padding: 16px; }
+.score-num { font-size: 72px; font-weight: 900; color: var(--gold); line-height: 1;
+  text-shadow: 0 0 30px rgba(200,169,81,0.5); }
+.score-grade { font-size: 16px; font-weight: 700; margin-top: 6px; }
+.score-pts { font-size: 18px; margin-top: 8px; color: var(--gold); }
+.score-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+.si { display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 14px; background: rgba(255,255,255,0.03); border-radius: 8px; font-size: 13px; }
+.si .good { color: var(--green); }
+.si .bad { color: var(--red); }
+.si .neutral { color: var(--gold); }
+.si .warn { color: #E0A855; }
+
+/* ---- Shop ---- */
+.shop-grid { display: flex; flex-direction: column; gap: 6px; }
+.shop-cat { color: var(--gold); font-weight: 700; font-size: 13px; margin-top: 12px; padding-left: 4px; }
+.shop-item { background: rgba(255,255,255,0.03); border-radius: 10px; padding: 14px;
+  border: 1px solid rgba(255,255,255,0.06); }
+.shop-item b { display: block; font-size: 14px; }
+.shop-item small { font-size: 11px; color: var(--muted); display: block; margin-top: 2px; }
+.shop-eff { font-size: 12px; color: var(--green); margin-top: 6px; }
+.shop-row { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
+.shop-price { font-size: 18px; font-weight: 700; color: var(--gold); }
+.owned-tag { font-size: 12px; color: var(--muted); }
+
+/* ---- Toast ---- */
+.toast {
+  position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+  background: var(--gold); color: #1A0D08; padding: 12px 26px; border-radius: 8px;
+  font-weight: 700; z-index: 1000; animation: toastIn 0.35s; pointer-events: none;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+}
+@keyframes toastIn { from { opacity:0; transform:translateX(-50%) translateY(-12px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }
+
+/* ---- Utility ---- */
+.hidden { display: none !important; }
+.text-center { text-align: center; }
+.mt-sm { margin-top: 8px; }
+.mt-md { margin-top: 16px; }
+.mt-lg { margin-top: 24px; }
+.gap-md { gap: 14px; }
+.flex-center { display: flex; justify-content: center; align-items: center; }
+
+/* ---- Idle screen ---- */
+.idle-icon { font-size: 80px; margin-bottom: 12px; animation: float 3s ease-in-out infinite; }
+@keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+.idle-sub { color: var(--muted); font-size: 14px; margin-bottom: 6px; }
+.idle-start { color: var(--muted); font-size: 12px; margin-bottom: 20px; }
+
+/* ---- Animations ---- */
+
+/* Dramatic judge entrance */
+@keyframes judgeEntrance {
+  0%   { opacity: 0; transform: translateX(120px) scale(0.7); filter: blur(8px); }
+  40%  { opacity: 1; filter: blur(0); }
+  60%  { transform: translateX(-10px) scale(1.03); }
+  80%  { transform: translateX(4px) scale(0.99); }
+  100% { opacity: 1; transform: translateX(0) scale(1); filter: blur(0); }
+}
+@keyframes spotlightPulse {
+  0%, 100% { opacity: 0.3; transform: scale(1); }
+  50%      { opacity: 0.6; transform: scale(1.1); }
+}
+@keyframes judgeAvatarPop {
+  0%   { transform: scale(0) rotate(-15deg); opacity: 0; }
+  50%  { transform: scale(1.2) rotate(3deg); opacity: 1; }
+  70%  { transform: scale(0.92) rotate(-1deg); }
+  100% { transform: scale(1) rotate(0); opacity: 1; }
+}
+@keyframes judgeSlideIn {
+  from { opacity: 0; transform: translateX(40px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes flavorReveal {
+  0%   { opacity: 0; transform: translateY(12px) scale(0.85); }
+  60%  { opacity: 0.7; transform: translateY(-2px) scale(1.04); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes dialogTypeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes cardRiseIn {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes scoreCountUp {
+  from { opacity: 0; transform: scale(0.4); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+@keyframes steamFloat {
+  0%, 100% { transform: translateY(0) scale(1); opacity: 0.6; }
+  50%      { transform: translateY(-10px) scale(1.1); opacity: 1; }
+}
+@keyframes playerBubbleIn {
+  0%   { opacity: 0; transform: translateX(-12px) scale(0.92); }
+  100% { opacity: 1; transform: translateX(0) scale(1); }
+}
+@keyframes playerBubbleOut {
+  0%   { opacity: 1; transform: translateX(0) scale(1); }
+  100% { opacity: 0; transform: translateX(-12px) scale(0.92); }
+}
+@keyframes playerFaceReact {
+  0%, 100% { transform: scale(1); }
+  30%      { transform: scale(1.08); }
+}
+
+/* Judge entrance container */
+.judge-entrance-card {
+  position: relative;
+  overflow: hidden;
+}
+.judge-spotlight {
+  position: absolute;
+  top: -40%; left: -20%;
+  width: 140%; height: 180%;
+  background: radial-gradient(ellipse at 30% 40%, rgba(200,169,81,0.18) 0%, transparent 60%);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.8s;
+}
+.judge-entrance-card.entering .judge-spotlight {
+  opacity: 1;
+  animation: spotlightPulse 2s ease-in-out infinite;
+}
+
+/* Judge entrance animations */
+.judge-entrance-card.entering .judge-avatar-entrance {
+  animation: judgeAvatarPop 0.7s 0.1s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
+}
+.judge-entrance-card.entering .judge-info {
+  animation: judgeEntrance 0.8s 0.2s ease-out both;
+}
+.judge-entrance-card.entering .judge-name-reveal {
+  animation: judgeSlideIn 0.6s 0.3s ease-out both;
+}
+.judge-entrance-card.entering .judge-flavor-wrap {
+  animation: flavorReveal 0.55s 0.5s ease-out both;
+}
+.judge-entrance-card.entering .reveal-text {
+  animation: dialogTypeIn 0.55s 0.65s ease-out both;
+}
+.judge-entrance-card.entering .judge-action-delay {
+  animation: dialogTypeIn 0.5s 0.85s ease-out both;
+}
+
+/* Standard animation classes */
+.judge-row.animate .judge-avatar {
+  animation: judgeAvatarPop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
+}
+.judge-row.animate .judge-info {
+  animation: judgeSlideIn 0.6s 0.15s ease-out both;
+}
+.judge-flavor-wrap.animate {
+  animation: flavorReveal 0.5s 0.4s ease-out both;
+}
+.judge-dialog.animate {
+  animation: dialogTypeIn 0.6s 0.6s ease-out both;
+}
+.card.rise-in {
+  animation: cardRiseIn 0.5s ease-out both;
+}
+.phase-enter {
+  animation: cardRiseIn 0.45s ease-out both;
+}
+.score-hero .score-num {
+  animation: scoreCountUp 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
+}
+.btn-shimmer {
+  background: linear-gradient(110deg, #C8A951 30%, #F0D878 50%, #C8A951 70%);
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+}
+
+/* Equipment card hover lift */
+.ecard, .rcard {
+  transition: transform 0.25s, box-shadow 0.25s, border-color 0.25s, background 0.25s;
+}
+.ecard:hover, .rcard:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+}
+
+/* Idle steam */
+.idle-steam {
+  display: inline-block;
+  animation: steamFloat 3s ease-in-out infinite;
+}
+.idle-steam:nth-child(2) { animation-delay: 0.5s; }
+.idle-steam:nth-child(3) { animation-delay: 1s; }
+
+/* ---- Tasting scene ---- */
+.tasting-scene {
+  display: flex; justify-content: center; padding: 16px 0 8px;
+}
+.tasting-judge {
+  text-align: center; position: relative;
+}
+.tasting-face {
+  font-size: 64px; transition: transform 0.3s;
+  animation: judgeTasteBounce 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
+}
+@keyframes judgeTasteBounce {
+  0%   { transform: scale(0.3) rotate(-15deg); opacity: 0; }
+  50%  { transform: scale(1.25) rotate(5deg); opacity: 1; }
+  75%  { transform: scale(0.9) rotate(-2deg); }
+  100% { transform: scale(1) rotate(0); opacity: 1; }
+}
+.tasting-action {
+  font-size: 14px; font-weight: 700; margin-top: 6px;
+  animation: dialogTypeIn 0.5s 0.5s ease-out both;
+  min-height: 24px;
+}
+/* Reaction variations */
+.tasting-face.love {
+  animation: judgeTasteBounce 0.6s both, lovePulse 0.5s 0.7s ease-in-out 3;
+}
+@keyframes lovePulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+}
+.tasting-face.hate {
+  animation: judgeTasteBounce 0.6s both, hateShake 0.4s 0.7s ease-in-out 2;
+}
+@keyframes hateShake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-8px); }
+  75% { transform: translateX(8px); }
+}
+.tasting-face.spit {
+  animation: judgeTasteBounce 0.6s both, spitAnim 0.6s 0.7s ease-out both;
+}
+@keyframes spitAnim {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.3); }
+  100% { transform: scale(0.8) rotate(-20deg); }
+}
+
+/* ---- Speed hint ---- */
+.speed-hint {
+  font-size: 11px; color: var(--muted);
+  animation: steamFloat 2s ease-in-out infinite;
+}
+
+/* ---- Player monologue (HTML) ---- */
+.player-monologue {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 8px 16px; margin: 0 0 6px 0;
+  opacity: 0; transition: opacity 0.4s;
+}
+.player-monologue.visible {
+  opacity: 1;
+}
+.player-face {
+  width: 40px; height: 40px; border-radius: 50%;
+  background: linear-gradient(135deg, #5A3A2A, #3A2018);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; flex-shrink: 0; border: 1.5px solid rgba(200,169,81,0.4);
+  transition: transform 0.3s;
+}
+.player-face.reacting {
+  animation: playerFaceReact 0.5s ease-out;
+}
+.player-bubble {
+  flex: 1;
+  background: rgba(0,0,0,0.55); border: 1px solid rgba(200,169,81,0.3);
+  border-radius: 12px; padding: 8px 14px;
+  font-size: 13px; color: var(--cream); line-height: 1.5;
+  position: relative;
+  min-height: 36px; display: flex; align-items: center;
+}
+.player-bubble::before {
+  content: '';
+  position: absolute; left: -7px; top: 12px;
+  width: 0; height: 0;
+  border-top: 6px solid transparent;
+  border-bottom: 6px solid transparent;
+  border-right: 7px solid rgba(200,169,81,0.3);
+}
+.player-bubble .mono-label {
+  position: absolute; top: -18px; left: 8px;
+  font-size: 10px; color: var(--gold); opacity: 0.6;
+}
+
+/* ---- Mobile (iPhone 17 Pro Max & general) ---- */
+@media (max-width: 768px) {
+  body {
+    padding: 4px;
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .header { flex-direction: column; gap: 4px; padding: 10px 14px; text-align: center; }
+  .header-logo { font-size: 16px; }
+  .header-stats { gap: 12px; font-size: 11px; }
+  .header-stats span { font-size: 14px; }
+  .card { padding: 12px; border-radius: 10px; margin-bottom: 8px; }
+  .card h2 { font-size: 14px; margin-bottom: 10px; }
+  .egrid { grid-template-columns: 1fr; gap: 6px; }
+  .rgrid { grid-template-columns: 1fr; gap: 8px; }
+  .speed-row { flex-direction: column; gap: 6px; }
+  .score-grid { grid-template-columns: 1fr; gap: 4px; }
+  .shop-grid { gap: 4px; }
+  .judge-row { flex-direction: column; text-align: center; gap: 10px; }
+  .judge-avatar { width: 56px; height: 56px; font-size: 28px; }
+  .judge-name { font-size: 17px; }
+  .tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .tab { white-space: nowrap; font-size: 12px; padding: 7px 16px; flex-shrink: 0; }
+
+  /* Canvas */
+  .brew-canvas-wrap canvas { height: 280px !important; }
+  .timer-display { font-size: 28px; }
+  .bsteps { padding: 0 8px 8px; }
+  .bstep { padding: 6px 10px; font-size: 11px; }
+  .bs-icon { font-size: 16px; width: 24px; }
+  .bs-info b { font-size: 12px; }
+  .bs-time { font-size: 12px; }
+
+  /* Player monologue */
+  .player-monologue { padding: 6px 8px; gap: 6px; }
+  .player-face { width: 34px; height: 34px; font-size: 18px; }
+  .player-bubble { font-size: 12px; padding: 6px 10px; border-radius: 10px; }
+
+  /* Scoring */
+  .score-num { font-size: 48px; }
+  .tasting-face { font-size: 52px; }
+  .tasting-action { font-size: 13px; }
+  .si { font-size: 12px; padding: 8px 10px; }
+
+  /* Shop */
+  .shop-item { padding: 12px; }
+  .shop-price { font-size: 16px; }
+
+  /* Buttons - large touch targets */
+  .btn { padding: 12px 22px; font-size: 14px; min-height: 42px; }
+  .btn-sm { padding: 8px 16px; font-size: 12px; min-height: 36px; }
+  .btn-lg { padding: 14px 32px; font-size: 16px; min-height: 48px; }
+  .speed-hint { font-size: 10px; }
+
+  /* Prevent zoom on double-tap */
+  button, .btn, .tab, .ecard, .rcard, .speed-opt {
+    touch-action: manipulation;
+  }
+
+  /* Idle screen */
+  .idle-icon { font-size: 56px; }
+  .idle-sub { font-size: 12px; }
+  .idle-start { font-size: 11px; }
+
+  /* Judge entrance */
+  .judge-entrance-card { overflow: hidden; }
+
+  /* Toast */
+  .toast { font-size: 13px; padding: 10px 20px; }
+
+  /* Flex center mobile */
+  .flex-center.gap-md { gap: 10px; flex-wrap: wrap; }
+}

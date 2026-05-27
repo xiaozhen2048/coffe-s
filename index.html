@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>手冲咖啡模拟器</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="container">
+
+  <!-- ====== HEADER ====== -->
+  <div class="header">
+    <div class="header-logo">☕ 手冲咖啡大赛</div>
+    <div class="header-stats">
+      <div>💰 积分 <span id="pts">500</span></div>
+      <div>📋 第 <span id="rnd">0</span> 轮</div>
+    </div>
+  </div>
+
+  <!-- ====== PHASE: IDLE ====== -->
+  <div id="phase-idle" class="card text-center">
+    <div class="idle-icon">
+      <span class="idle-steam">♨️</span>
+      <span>☕</span>
+      <span class="idle-steam">♨️</span>
+    </div>
+    <h2 style="justify-content:center;">欢迎来到手冲咖啡大赛</h2>
+    <p class="idle-sub">用技巧和策略，为评委制作一杯完美的手冲咖啡</p>
+    <p class="idle-start">初始积分 500 · 基础装备全套 · 基础拼配豆无限使用</p>
+    <button class="btn btn-gold btn-lg btn-shimmer" onclick="startRound()">🎯 开始比赛</button>
+    <button class="btn btn-outline btn-sm" onclick="goShop()" style="margin-left:10px;">🛒 商店</button>
+  </div>
+
+  <!-- ====== PHASE: JUDGE (with dramatic entrance) ====== -->
+  <div id="phase-judge" class="card hidden judge-entrance-card">
+    <div class="judge-spotlight"></div>
+    <div class="judge-row animate-target">
+      <div class="judge-avatar judge-avatar-entrance" id="judge-avatar">🧑‍🍳</div>
+      <div class="judge-info">
+        <div class="judge-name judge-name-reveal" id="judge-name"></div>
+        <div class="judge-title" id="judge-title"></div>
+        <div class="judge-flavor-wrap" id="judge-flavor"></div>
+      </div>
+    </div>
+    <div class="judge-dialog reveal-text" id="judge-dialog"></div>
+    <div class="flex-center mt-md judge-action-delay">
+      <button class="btn btn-gold btn-lg" onclick="goPrep()">进入准备阶段 →</button>
+    </div>
+  </div>
+
+  <!-- ====== PHASE: PREPARATION ====== -->
+  <div id="phase-prep" class="hidden">
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('equip')">🔧 选择装备</button>
+      <button class="tab" onclick="switchTab('recipe')">📋 选择配方</button>
+    </div>
+    <div id="prep-equip"></div>
+    <div id="prep-recipe" class="hidden"></div>
+    <div class="flex-center mt-md">
+      <button class="btn btn-gold btn-lg" onclick="startBrewing()">☕ 开始制作</button>
+    </div>
+  </div>
+
+  <!-- ====== PHASE: BREWING ====== -->
+  <div id="phase-brewing" class="hidden">
+    <div class="brew-canvas-wrap">
+      <canvas id="brew-canvas" height="400"></canvas>
+    </div>
+    <!-- Player monologue (HTML, outside canvas) -->
+    <div class="player-monologue" id="player-monologue">
+      <div class="player-face" id="player-face">😌</div>
+      <div class="player-bubble" id="player-bubble"></div>
+    </div>
+    <div class="timer-box">
+      <div class="timer-display" id="timer">00:00</div>
+    </div>
+    <div class="progress-bar"><div class="fill" id="brew-progress" style="width:0%"></div></div>
+    <div class="bsteps" id="brew-steps"></div>
+    <div class="flex-center gap-md">
+      <button class="btn btn-outline btn-sm" id="speed-btn" onclick="toggleSpeed()">⚡ 1倍速</button>
+      <span class="speed-hint">👆 点击切换速度</span>
+    </div>
+  </div>
+
+  <!-- ====== PHASE: SCORING ====== -->
+  <div id="phase-scoring" class="card hidden">
+    <h2 style="justify-content:center;">📊 评委品鉴</h2>
+    <!-- Judge tasting reaction -->
+    <div class="tasting-scene">
+      <div class="tasting-judge" id="tasting-judge">
+        <div class="tasting-face" id="tasting-face">😐</div>
+        <div class="tasting-action" id="tasting-action"></div>
+      </div>
+    </div>
+    <div class="score-hero">
+      <div class="score-num" id="final-score">0</div>
+      <div style="color:var(--muted);">/ 100</div>
+      <div class="score-grade" id="score-grade"></div>
+      <div class="score-pts">💰 获得积分: <span id="points-earned" style="font-weight:900;">0</span></div>
+    </div>
+    <div class="score-grid" id="score-detail"></div>
+    <div class="flex-center gap-md mt-md">
+      <button class="btn btn-outline" onclick="goShop()">🛒 去商店</button>
+      <button class="btn btn-gold" onclick="startRound()">▶ 下一轮</button>
+    </div>
+  </div>
+
+  <!-- ====== PHASE: SHOP ====== -->
+  <div id="phase-shop" class="card hidden">
+    <h2>🛒 装备商店</h2>
+    <p style="color:var(--muted);">当前积分: <span style="color:var(--gold);font-weight:700;" id="shop-pts">500</span></p>
+    <div class="shop-grid mt-md" id="shop-grid"></div>
+    <div class="flex-center mt-md">
+      <button class="btn btn-gold" onclick="startRound()">▶ 返回比赛</button>
+    </div>
+  </div>
+
+</div>
+
+<div id="toast-container"></div>
+
+<script src="js/data.js"></script>
+<script src="js/brew.js"></script>
+<script src="js/game.js"></script>
+<script src="js/ui.js"></script>
+<script>
+try {
+  console.log('[Coffee] JS loaded, initializing...');
+  initCanvas();
+  setPhase('idle');
+  UIRefresh();
+  console.log('[Coffee] Init complete, phase:', G.phase);
+} catch(e) {
+  console.error('[Coffee] Init error:', e.message);
+  document.body.innerHTML += '<div style="position:fixed;top:0;left:0;right:0;background:red;color:white;padding:10px;z-index:9999;font-size:14px;">JS Error: ' + e.message + '</div>';
+}
+</script>
+</body>
+</html>
