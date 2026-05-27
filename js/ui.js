@@ -18,7 +18,6 @@ function UIRefresh() {
   if (G.phase === 'prep') renderPrep();
   if (G.phase === 'shop') renderShop();
 
-  // Animate the visible card
   var visible = document.querySelector('#phase-' + G.phase + '.card');
   if (visible) {
     visible.classList.remove('rise-in');
@@ -32,14 +31,13 @@ function UIRefresh() {
 function renderJudge() {
   const j = G.judge;
   const f = FLAVORS[j.flavor];
-  document.getElementById('judge-avatar').textContent = j.avatar;
+  document.getElementById('judge-avatar').innerHTML = '<img src="' + j.img + '" alt="' + j.name + '">';
   document.getElementById('judge-name').textContent = j.name;
   document.getElementById('judge-title').textContent = j.title;
   document.getElementById('judge-flavor').innerHTML =
-    `<span class="flavor-tag" style="background:${f.bg};color:${f.color};border:1px solid ${f.color}40;">${f.icon} 偏好: ${f.name} — ${f.desc}</span>`;
+    '<span class="flavor-tag" style="background:'+f.bg+';color:'+f.color+';border:1px solid '+f.color+'40;">'+f.icon+' 偏好: '+f.name+' — '+f.desc+'</span>';
   document.getElementById('judge-dialog').textContent = '「' + j.dialog + '」';
 
-  // Dramatic entrance
   var card = document.getElementById('phase-judge');
   if (card) {
     card.classList.remove('entering');
@@ -54,33 +52,35 @@ let prepTab = 'equip';
 
 function switchTab(tab) {
   prepTab = tab;
-  document.querySelectorAll('#phase-prep .tab').forEach((t,i) => t.classList.toggle('active', (i===0 && tab==='equip') || (i===1 && tab==='recipe')));
+  document.querySelectorAll('#phase-prep .tab').forEach(function(t,i) {
+    t.classList.toggle('active', (i===0 && tab==='equip') || (i===1 && tab==='recipe'));
+  });
   document.getElementById('prep-equip').classList.toggle('hidden', tab !== 'equip');
   document.getElementById('prep-recipe').classList.toggle('hidden', tab !== 'recipe');
 }
 
 function renderPrep() {
-  // Equip tab
   document.getElementById('prep-equip').innerHTML = renderBeanPicker() + renderGrinderPicker() + renderAutoEquip() + renderSpeedPicker();
-  // Recipe tab
   document.getElementById('prep-recipe').innerHTML = renderRecipePicker();
   switchTab(prepTab);
 }
 
 function renderBeanPicker() {
-  const beans = EQUIPMENT.beans.map(b => {
+  const beans = EQUIPMENT.beans.map(function(b) {
     const owned = isOwned('beans', b.id);
     const uses = b.id === 'basic_blend' ? '∞' : (G.beanUses[b.id] || 0);
     const canUse = owned && hasBeanUses(b.id);
     const sel = G.selection.bean === b.id;
-    return `<div class="ecard ${sel?'sel':''} ${!canUse?'locked':''}" onclick="${canUse?`pickBean('${b.id}')`:''}">
-      <div class="ec-name">${b.name}</div>
-      <div class="ec-tier ${b.tier}">${b.tier==='advanced'?'✦ 进阶':'基础'}</div>
-      <div class="ec-effect">🍇 风味 +${b.flavorBonus} ${b.flavorMatch ? '| 适配'+FLAVORS[b.flavorMatch].name : ''}</div>
-      <div class="ec-meta">${owned ? '✅ 拥有 · 剩余'+uses+'次' : '🔒 未拥有'}</div>
-    </div>`;
+    return '<div class="ecard '+(sel?'sel':'')+' '+(canUse?'':'locked')+'" onclick="'+(canUse?'pickBean(\''+b.id+'\')':'')+'">'
+      + '<img src="'+b.img+'" alt="'+b.name+'">'
+      + '<div class="ec-info">'
+      + '<div class="ec-name">'+b.name+'</div>'
+      + '<div class="ec-tier '+b.tier+'">'+(b.tier==='advanced'?'✦ 进阶':'基础')+'</div>'
+      + '<div class="ec-effect">🍇 风味 +'+b.flavorBonus+(b.flavorMatch ? ' | 适配'+FLAVORS[b.flavorMatch].name : '')+'</div>'
+      + '<div class="ec-meta">'+(owned ? '✅ 拥有 · 剩余'+uses+'次' : '🔒 未拥有')+'</div>'
+      + '</div></div>';
   }).join('');
-  return `<div class="card"><h2>🫘 咖啡豆</h2><div class="egrid">${beans}</div></div>`;
+  return '<div class="card"><h2>🫘 咖啡豆</h2><div class="egrid">'+beans+'</div></div>';
 }
 
 function pickBean(id) {
@@ -90,17 +90,19 @@ function pickBean(id) {
 }
 
 function renderGrinderPicker() {
-  const grinders = EQUIPMENT.grinder.map(g => {
+  const grinders = EQUIPMENT.grinder.map(function(g) {
     const owned = isOwned('grinder', g.id);
     const sel = G.selection.grinder === g.id;
-    return `<div class="ecard ${sel?'sel':''} ${!owned?'locked':''}" onclick="${owned?`pickGrinder('${g.id}')`:''}">
-      <div class="ec-name">${g.name}</div>
-      <div class="ec-tier ${g.tier}">${g.tier==='advanced'?'✦ 进阶':'基础'}</div>
-      <div class="ec-effect">⏱ ${g.grindTime}s · 均匀度+${g.completionBonus}%</div>
-      <div class="ec-meta">${owned ? '✅ 拥有' : '🔒 未拥有'}</div>
-    </div>`;
+    return '<div class="ecard '+(sel?'sel':'')+' '+(owned?'':'locked')+'" onclick="'+(owned?'pickGrinder(\''+g.id+'\')':'')+'">'
+      + '<img src="'+g.img+'" alt="'+g.name+'">'
+      + '<div class="ec-info">'
+      + '<div class="ec-name">'+g.name+'</div>'
+      + '<div class="ec-tier '+g.tier+'">'+(g.tier==='advanced'?'✦ 进阶':'基础')+'</div>'
+      + '<div class="ec-effect">⏱ '+g.grindTime+'s · 均匀度+'+g.completionBonus+'%</div>'
+      + '<div class="ec-meta">'+(owned ? '✅ 拥有' : '🔒 未拥有')+'</div>'
+      + '</div></div>';
   }).join('');
-  return `<div class="card"><h2>⚙️ 磨豆器</h2><div class="egrid">${grinders}</div></div>`;
+  return '<div class="card"><h2>⚙️ 磨豆器</h2><div class="egrid">'+grinders+'</div></div>';
 }
 
 function pickGrinder(id) {
@@ -111,71 +113,71 @@ function pickGrinder(id) {
 
 function renderAutoEquip() {
   const cats = ['filter_cone','filter_paper','carafe','scale','kettle','glass'];
-  const items = cats.map(c => {
+  const items = cats.map(function(c) {
     const best = bestOwned(c);
     if (!best) return '';
     const meta = CATEGORY_META[c];
     let eff = '';
-    if (c==='filter_cone'||c==='filter_paper'||c==='kettle') eff = `📐 +${best.completionBonus}%`;
-    else if (c==='carafe'||c==='glass') eff = `✨ +${best.aestheticsBonus}`;
-    else if (c==='scale') eff = `⚖️ ±${best.accuracy}g · +${best.completionBonus}%`;
-    return `<div class="ecard sel">
-      <div class="ec-name">${meta.icon} ${best.name}</div>
-      <div class="ec-tier ${best.tier}">${best.tier==='advanced'?'✦ 进阶':'基础'}</div>
-      <div class="ec-effect">${eff}</div>
-    </div>`;
+    if (c==='filter_cone'||c==='filter_paper'||c==='kettle') eff = '📐 +'+best.completionBonus+'%';
+    else if (c==='carafe'||c==='glass') eff = '✨ +'+best.aestheticsBonus;
+    else if (c==='scale') eff = '⚖️ ±'+best.accuracy+'g · +'+best.completionBonus+'%';
+    return '<div class="ecard sel">'
+      + '<img src="'+best.img+'" alt="'+best.name+'">'
+      + '<div class="ec-info">'
+      + '<div class="ec-name">'+meta.icon+' '+best.name+'</div>'
+      + '<div class="ec-tier '+best.tier+'">'+(best.tier==='advanced'?'✦ 进阶':'基础')+'</div>'
+      + '<div class="ec-effect">'+eff+'</div>'
+      + '</div></div>';
   }).join('');
-  return `<div class="card"><h2>🔧 已装备（自动选用最佳）</h2><div class="egrid">${items}</div></div>`;
+  return '<div class="card"><h2>🔧 已装备（自动选用最佳）</h2><div class="egrid">'+items+'</div></div>';
 }
 
 function renderSpeedPicker() {
-  const opts = Object.values(SPEEDS).map(s => {
+  const opts = Object.values(SPEEDS).map(function(s) {
     const sel = G.selection.speed === s.id;
-    return `<div class="speed-opt ${sel?'sel':''}" onclick="pickSpeed('${s.id}')">
-      <div class="sp-icon">${s.icon}</div>
-      <div class="sp-name">${s.name}</div>
-      <div class="sp-time">${s.label}</div>
-    </div>`;
+    return '<div class="speed-opt '+(sel?'sel':'')+'" onclick="pickSpeed(\''+s.id+'\')">'
+      + '<div class="sp-icon">'+s.icon+'</div>'
+      + '<div class="sp-name">'+s.name+'</div>'
+      + '<div class="sp-time">'+s.label+'</div></div>';
   }).join('');
-  return `<div class="card"><h2>💧 注水速度</h2><div class="speed-row">${opts}</div></div>`;
+  return '<div class="card"><h2>💧 注水速度</h2><div class="speed-row">'+opts+'</div></div>';
 }
 
 function pickSpeed(id) { G.selection.speed = id; renderPrep(); }
 
 function renderRecipePicker() {
   const f = G.judge.flavor;
-  const cards = RECIPES.map(r => {
+  const cards = RECIPES.map(function(r) {
     const match = r.flavor === f;
     const sel = G.selection.recipe && G.selection.recipe.id === r.id;
     const fl = FLAVORS[r.flavor];
-    return `<div class="rcard ${sel?'sel':''}" onclick="pickRecipe('${r.id}')">
-      <div class="rc-icon">${r.icon}</div>
-      <div class="rc-name">${r.name}</div>
-      <div class="rc-flavor" style="background:${fl.bg};color:${fl.color};">${fl.name}风味</div>
-      <div class="rc-match">${match ? '✅ 匹配评委偏好' : '⚠️ 不匹配'}</div>
-      <div class="rc-params">${r.params}</div>
-      <div class="rc-desc">${r.desc}</div>
-    </div>`;
+    return '<div class="rcard '+(sel?'sel':'')+'" onclick="pickRecipe(\''+r.id+'\')">'
+      + '<img src="'+r.img+'" alt="'+r.name+'">'
+      + '<div class="rc-name">'+r.name+'</div>'
+      + '<div class="rc-flavor" style="background:'+fl.bg+';color:'+fl.color+';">'+fl.name+'风味</div>'
+      + '<div class="rc-match">'+(match ? '✅ 匹配评委偏好' : '⚠️ 不匹配')+'</div>'
+      + '<div class="rc-params">'+r.params+'</div>'
+      + '<div class="rc-desc">'+r.desc+'</div></div>';
   }).join('');
-  return `<div class="card"><h2>📋 手冲配方 <span style="font-size:12px;color:#888;">评委偏好: ${FLAVORS[f].name}</span></h2>
-    <div class="rgrid">${cards}</div></div>`;
+  return '<div class="card"><h2>📋 手冲配方 <span style="font-size:12px;color:#888;">评委偏好: '+FLAVORS[f].name+'</span></h2>'
+    + '<div class="rgrid">'+cards+'</div></div>';
 }
 
-function pickRecipe(id) { G.selection.recipe = RECIPES.find(r=>r.id===id); renderPrep(); }
+function pickRecipe(id) { G.selection.recipe = RECIPES.find(function(r){return r.id===id}); renderPrep(); }
 
 // ---- Brewing Steps ----
 
 function renderBrewSteps(steps, activeIdx) {
   const el = document.getElementById('brew-steps');
-  el.innerHTML = steps.map((s,i) => {
+  el.innerHTML = steps.map(function(s,i) {
     let cls = 'bstep';
     if (i < activeIdx) cls += ' done';
     if (i === activeIdx) cls += ' active';
     const icon = i < activeIdx ? '✅' : (i === activeIdx ? '⏳' : '⬜');
     const time = i < activeIdx ? s.time+'s' : (i === activeIdx ? '...' : s.time+'s');
-    return `<div class="${cls}"><span class="bs-icon">${s.icon}</span>
-      <span class="bs-info"><b>${icon} ${s.name}</b><small>${s.detail}</small></span>
-      <span class="bs-time">${time}</span></div>`;
+    return '<div class="'+cls+'"><span class="bs-icon">'+s.icon+'</span>'
+      + '<span class="bs-info"><b>'+icon+' '+s.name+'</b><small>'+s.detail+'</small></span>'
+      + '<span class="bs-time">'+time+'</span></div>';
   }).join('');
 }
 
@@ -191,7 +193,6 @@ function renderScoring(r) {
   document.getElementById('score-grade').textContent = grade;
   document.getElementById('points-earned').textContent = '+' + r.pointsEarned;
 
-  // ---- Judge tasting reaction ----
   var face = document.getElementById('tasting-face');
   var action = document.getElementById('tasting-action');
   var reaction = getTastingReaction(r);
@@ -200,17 +201,17 @@ function renderScoring(r) {
   action.textContent = reaction.action;
   action.style.color = reaction.color;
 
-  const cls = (v, good, bad) => v ? 'good' : 'bad';
-  const tcls = (t) => t <= 240 ? 'good' : (t <= 300 ? 'warn' : 'bad');
-  document.getElementById('score-detail').innerHTML = `
-    <div class="si"><span>🎯 配方匹配</span><b class="${cls(r.recipeMatch,'good','bad')}">${r.recipeMatch?'是':'否'} (${r.matchScore}分)</b></div>
-    <div class="si"><span>🫘 咖啡豆品质</span><b class="${r.beanQualityBonus>=15?'good':'neutral'}">+${r.beanQualityBonus+r.beanMatchBonus} (${r.bean.name})</b></div>
-    <div class="si"><span>📐 完成度</span><b class="${r.completion>=85?'good':r.completion>=75?'neutral':'bad'}">${r.completion}%</b></div>
-    <div class="si"><span>✨ 美观加分</span><b class="good">+${r.aesthetics}</b></div>
-    <div class="si"><span>⏱ 总耗时</span><b class="${tcls(r.totalTime)}">${r.totalTime}秒</b></div>
-    <div class="si"><span>⏰ 时间惩罚</span><b class="${r.timePenalty===0?'good':'bad'}">${r.timePenalty>0?'-'+r.timePenalty:'0'}</b></div>
-    <div class="si"><span>💧 注水速度</span><b class="${cls(r.speedMatch,'good','bad')}">${SPEEDS[G.selection.speed].name} ${r.speedMatch?'✅':'⚠️'}</b></div>
-    <div class="si"><span>🍇 风味基础分</span><b class="neutral">${r.flavorBase}/70</b></div>`;
+  function cls(v, good, bad) { return v ? good : bad; }
+  function tcls(t) { return t <= 240 ? 'good' : (t <= 300 ? 'warn' : 'bad'); }
+  document.getElementById('score-detail').innerHTML =
+    '<div class="si"><span>🎯 配方匹配</span><b class="'+cls(r.recipeMatch,'good','bad')+'">'+(r.recipeMatch?'是':'否')+' ('+r.matchScore+'分)</b></div>'
+    + '<div class="si"><span>🫘 咖啡豆品质</span><b class="'+(r.beanQualityBonus>=15?'good':'neutral')+'">+'+r.beanQualityBonus+r.beanMatchBonus+' ('+r.bean.name+')</b></div>'
+    + '<div class="si"><span>📐 完成度</span><b class="'+(r.completion>=85?'good':r.completion>=75?'neutral':'bad')+'">'+r.completion+'%</b></div>'
+    + '<div class="si"><span>✨ 美观加分</span><b class="good">+'+r.aesthetics+'</b></div>'
+    + '<div class="si"><span>⏱ 总耗时</span><b class="'+tcls(r.totalTime)+'">'+r.totalTime+'秒</b></div>'
+    + '<div class="si"><span>⏰ 时间惩罚</span><b class="'+(r.timePenalty===0?'good':'bad')+'">'+(r.timePenalty>0?'-'+r.timePenalty:'0')+'</b></div>'
+    + '<div class="si"><span>💧 注水速度</span><b class="'+cls(r.speedMatch,'good','bad')+'">'+SPEEDS[G.selection.speed].name+' '+(r.speedMatch?'✅':'⚠️')+'</b></div>'
+    + '<div class="si"><span>🍇 风味基础分</span><b class="neutral">'+r.flavorBase+'/70</b></div>';
 }
 
 function getTastingReaction(r) {
@@ -255,28 +256,32 @@ function goShop() {
 function renderShop() {
   document.getElementById('shop-pts').textContent = G.points;
   let html = '';
-  Object.entries(EQUIPMENT).forEach(([cat, items]) => {
+  Object.entries(EQUIPMENT).forEach(function(entry) {
+    const cat = entry[0];
+    const items = entry[1];
     const meta = CATEGORY_META[cat];
-    html += `<div class="shop-cat">${meta.icon} ${meta.name}</div>`;
-    items.forEach(it => {
+    html += '<div class="shop-cat">'+meta.icon+' '+meta.name+'</div>';
+    items.forEach(function(it) {
       if (it.price === 0) return;
       const owned = isOwned(cat, it.id);
       const uses = cat==='beans' && owned ? (it.id==='basic_blend'?'∞':(G.beanUses[it.id]||0)) : null;
       const canBuy = !owned && G.points >= it.price;
       let eff = '';
-      if (cat==='beans') eff = `🍇 风味 +${it.flavorBonus}`;
-      else if (cat==='filter_cone'||cat==='filter_paper'||cat==='kettle') eff = `📐 精度 +${it.completionBonus}%`;
-      else if (cat==='carafe'||cat==='glass') eff = `✨ 美观 +${it.aestheticsBonus}`;
-      else if (cat==='scale') eff = `⚖️ ±${it.accuracy}g · +${it.completionBonus}%`;
-      else if (cat==='grinder') eff = `⏱ ${it.grindTime}s · +${it.completionBonus}%`;
-      html += `<div class="shop-item">
-        <div><b>${it.name}</b><small>${it.detail}</small></div>
-        <div class="shop-eff">${eff}</div>
-        ${cat==='beans'&&!owned?'<small>购买得5次使用量</small>':''}
-        <div class="shop-row"><span class="shop-price">💰 ${it.price}</span>
-        ${owned?`<span class="owned-tag">✅ 已拥有${uses!==null?' ('+uses+'次)':''}</span>`
-        :`<button class="btn btn-gold btn-sm" onclick="buyItem('${cat}','${it.id}')" ${!canBuy?'disabled':''}>${G.points>=it.price?'购买':'积分不足'}</button>`}</div>
-      </div>`;
+      if (cat==='beans') eff = '🍇 风味 +'+it.flavorBonus;
+      else if (cat==='filter_cone'||cat==='filter_paper'||cat==='kettle') eff = '📐 精度 +'+it.completionBonus+'%';
+      else if (cat==='carafe'||cat==='glass') eff = '✨ 美观 +'+it.aestheticsBonus;
+      else if (cat==='scale') eff = '⚖️ ±'+it.accuracy+'g · +'+it.completionBonus+'%';
+      else if (cat==='grinder') eff = '⏱ '+it.grindTime+'s · +'+it.completionBonus+'%';
+      html += '<div class="shop-item">'
+        + '<img src="'+it.img+'" alt="'+it.name+'">'
+        + '<div class="shop-info"><b>'+it.name+'</b><small>'+it.detail+'</small>'
+        + '<div class="shop-eff">'+eff+'</div>'
+        + (cat==='beans'&&!owned?'<small>购买得5次使用量</small>':'')
+        + '</div>'
+        + '<div class="shop-row"><span class="shop-price">💰 '+it.price+'</span>'
+        + (owned?'<span class="owned-tag">✅ 已拥有'+(uses!==null?' ('+uses+'次)':'')+'</span>'
+        :'<button class="btn btn-gold btn-sm" onclick="buyItem(\''+cat+'\',\''+it.id+'\')" '+(canBuy?'':'disabled')+'>'+(G.points>=it.price?'购买':'积分不足')+'</button>')
+        + '</div></div>';
     });
   });
   document.getElementById('shop-grid').innerHTML = html;
