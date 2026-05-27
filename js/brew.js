@@ -1,21 +1,19 @@
 // ===========================
-// 手冲咖啡模拟器 - Canvas 动画 v3
+// 手冲咖啡模拟器 - Canvas 动画 v4
+// 大幅升级：比例优化、细节增强、粒子系统改进
 // ===========================
 
 let animCanvas, animCtx;
 let steamParticles = [];
 let dripParticles = [];
-let swirlAngle = 0;
+let fallingParticles = [];
 let activeMonologue = null;
-let monologueAlpha = 0;
 
-// Particle manager
 function clearParticles() {
   steamParticles = [];
   dripParticles = [];
-  swirlAngle = 0;
+  fallingParticles = [];
   activeMonologue = null;
-  monologueAlpha = 0;
 }
 
 function initCanvas() {
@@ -33,520 +31,983 @@ function resizeCanvas() {
   animCanvas.height = 520;
 }
 
-// ---- Main ----
+// ---- Main Render ----
 
 function updateCanvas(timer, total, activeStep) {
   if (!animCtx) return;
   var ctx = animCtx, W = animCanvas.width, H = animCanvas.height;
   ctx.clearRect(0, 0, W, H);
 
-  var progress = total > 0 ? Math.min(timer / total, 1) : 0;
-  var cx = W / 2;
-
-  // Warm background
-  var bg = ctx.createRadialGradient(cx, H*0.45, 0, cx, H*0.45, W*0.65);
-  bg.addColorStop(0, 'rgba(50,25,8,0.35)'); bg.addColorStop(1, 'rgba(8,4,1,0)');
+  // === Warm ambient background ===
+  var bg = ctx.createRadialGradient(W/2, H*0.4, 10, W/2, H*0.45, W*0.7);
+  bg.addColorStop(0, 'rgba(55,28,10,0.45)');
+  bg.addColorStop(0.5, 'rgba(30,15,5,0.25)');
+  bg.addColorStop(1, 'rgba(8,4,1,0)');
   ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
 
-  // Monologue check
-  checkMonologue(timer);
+  // Counter surface line
+  var counterY = H - 30;
+  var woodGrad = ctx.createLinearGradient(0, counterY, 0, H);
+  woodGrad.addColorStop(0, 'rgba(120,75,40,0.7)');
+  woodGrad.addColorStop(0.03, 'rgba(160,105,55,0.6)');
+  woodGrad.addColorStop(0.06, 'rgba(100,65,35,0.8)');
+  woodGrad.addColorStop(1, 'rgba(60,35,18,0.9)');
+  ctx.fillStyle = woodGrad;
+  ctx.fillRect(0, counterY, W, H - counterY);
 
-  // Draw equipment (bottom to top)
-  // Step 0: weigh   Step 1: grind   Step 2: setup   Step 3: pour   Step 4: serve
-  drawScale(ctx, cx, H);
-  if (activeStep >= 0) drawWeighing(ctx, cx, H, timer, total, progress, activeStep);
-  if (activeStep >= 1) drawGrinding(ctx, cx, H, timer, total, progress, activeStep);
+  // Wood grain lines
+  ctx.strokeStyle = 'rgba(80,50,25,0.15)';
+  ctx.lineWidth = 1;
+  for (var i = 0; i < 8; i++) {
+    ctx.beginPath();
+    var wy = counterY + 5 + i * 18;
+    ctx.moveTo(0, wy);
+    for (var wx = 0; wx < W; wx += 40) {
+      ctx.lineTo(wx + 40, wy + Math.sin(wx*0.03 + i)*2);
+    }
+    ctx.stroke();
+  }
+
+  var cx = W / 2;
+
+  // === Render equipment in layer order ===
+  // Step 0: weigh, 1: grind, 2: setup, 3: pour, 4: serve
+  if (activeStep <= 0) drawScale(ctx, cx, H);
+  if (activeStep >= 0) drawWeighing(ctx, cx, H, timer, total, activeStep);
+  if (activeStep >= 1) drawGrinding(ctx, cx, H, timer, total, activeStep);
   if (activeStep >= 2) {
-    drawCarafe(ctx, cx, H, progress, activeStep);
-    drawDripper(ctx, cx, H, timer, total, progress, activeStep);
-    drawCoffeeBed(ctx, cx, H, timer, total, progress, activeStep);
+    drawCarafe(ctx, cx, H, activeStep);
+    drawDripper(ctx, cx, H, timer, total, activeStep);
   }
   if (activeStep >= 3) {
-    drawKettleAndPour(ctx, cx, H, timer, total, progress, activeStep);
-    drawCoffeeLevel(ctx, cx, H, timer, total, progress);
-    drawSwirl(ctx, cx, H, timer, total, progress);
+    drawKettleAndPour(ctx, cx, H, timer, total, activeStep);
+    drawCoffeeLevel(ctx, cx, H, timer, total);
+    drawSwirl(ctx, cx, H, timer, total);
     updateSteam(ctx, cx, H);
-    updateDrips(ctx, cx, H, timer, total, progress, activeStep);
+    updateDrips(ctx, cx, H, timer, total, activeStep);
+    updateFalling(ctx, cx, H);
   }
-  if (activeStep >= 4) drawServe(ctx, cx, H, timer, total, progress);
+  if (activeStep >= 4) drawServe(ctx, cx, H, timer, total);
 
-  // Monologue overlay (HTML-based, kept for fallback)
-  updatePlayerMonologue(timer);
+  checkMonologue(timer);
 }
 
 // ==========================================
-// SCALE
+// SCALE - detailed kitchen scale
 // ==========================================
 
 function drawScale(ctx, cx, H) {
-  var y = H - 50;
-  // Platform
-  ctx.fillStyle = '#2A2A2A'; roundRect(ctx, cx-60, y, 120, 18, 4);
-  ctx.fillStyle = '#3A3A3A'; roundRect(ctx, cx-55, y-2, 110, 6, 2);
-  // Body
-  ctx.fillStyle = '#1E1E1E'; roundRect(ctx, cx-45, y-7, 90, 10, 3);
-  // LED
-  ctx.fillStyle = '#0A0A0A'; roundRect(ctx, cx-22, y-5, 44, 7, 2);
-  ctx.fillStyle = '#4ADE80'; ctx.font = '6px monospace'; ctx.textAlign = 'center';
-  ctx.fillText('00.0g', cx, y);
-  // Silicone feet
-  ctx.fillStyle = '#444'; roundRect(ctx, cx-50, y+18, 10, 4, 2); roundRect(ctx, cx+40, y+18, 10, 4, 2);
+  var y = H - 28;
+  // Shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.beginPath(); ctx.ellipse(cx, y+20, 70, 6, 0, 0, Math.PI*2); ctx.fill();
+
+  // Platform top (stainless steel)
+  var platGrad = ctx.createLinearGradient(cx, y-5, cx, y+5);
+  platGrad.addColorStop(0, '#C8C8C8'); platGrad.addColorStop(0.3, '#E0E0E0');
+  platGrad.addColorStop(0.5, '#EAEAEA'); platGrad.addColorStop(0.7, '#D8D8D8');
+  platGrad.addColorStop(1, '#B0B0B0');
+  ctx.fillStyle = platGrad;
+  roundRect(ctx, cx-65, y-2, 130, 8, 3);
+
+  // Platform body
+  var bodyGrad = ctx.createLinearGradient(cx, y+6, cx, y+18);
+  bodyGrad.addColorStop(0, '#3A3A3E'); bodyGrad.addColorStop(1, '#1A1A1E');
+  ctx.fillStyle = bodyGrad;
+  roundRect(ctx, cx-55, y+6, 110, 14, 4);
+
+  // LCD screen
+  ctx.fillStyle = '#0A0A0E';
+  roundRect(ctx, cx-28, y+8, 56, 10, 3);
+  // Green LED text
+  ctx.fillStyle = '#4ADE80';
+  ctx.font = 'bold 8px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('00.0 g', cx, y+16);
+
+  // Feet
+  for (var fx of [cx-48, cx+48]) {
+    ctx.fillStyle = '#444';
+    roundRect(ctx, fx-6, y+20, 12, 4, 2);
+  }
 }
 
 // ==========================================
-// WEIGHING (step 0) - scoop beans onto scale
+// WEIGHING - scoop beans onto scale
 // ==========================================
 
-function drawWeighing(ctx, cx, H, timer, total, progress, step) {
-  if (step !== 0) return;
-  var y = H - 50;
-  var phase = Math.min(progress * 10, 1); // only during weighing
+function drawWeighing(ctx, cx, H, timer, total, activeStep) {
+  if (activeStep !== 0) return;
+  var progress = Math.min(timer / total * 10, 1);
+  var scaleY = H - 28;
 
-  // Bean bag
-  var bagX = cx - 85, bagY = H - 230;
-  ctx.fillStyle = '#6B4E14'; ctx.beginPath();
-  ctx.moveTo(bagX-18, bagY-15); ctx.quadraticCurveTo(bagX-12, bagY-30, bagX, bagY-25);
-  ctx.lineTo(bagX+15, bagY-22); ctx.quadraticCurveTo(bagX+25, bagY-10, bagX+18, bagY+3);
-  ctx.lineTo(bagX+5, bagY+15); ctx.quadraticCurveTo(bagX-5, bagY+18, bagX-18, bagY+3);
-  ctx.closePath(); ctx.fill();
-  ctx.fillStyle = '#C8A951'; ctx.font = '6px sans-serif'; ctx.textAlign = 'center';
-  ctx.fillText('COFFEE', bagX+2, bagY-5);
+  // Bean bag on left
+  var bagX = cx - 100, bagY = H - 210;
+  var bagGrad = ctx.createLinearGradient(bagX, bagY-20, bagX, bagY+20);
+  bagGrad.addColorStop(0, '#8B6914'); bagGrad.addColorStop(0.5, '#A07818');
+  bagGrad.addColorStop(1, '#6B4E10');
+  ctx.fillStyle = bagGrad;
+  ctx.beginPath();
+  ctx.moveTo(bagX-22, bagY-25);
+  ctx.quadraticCurveTo(bagX-10, bagY-35, bagX+5, bagY-22);
+  ctx.lineTo(bagX+18, bagY);
+  ctx.quadraticCurveTo(bagX+25, bagY+15, bagX+10, bagY+22);
+  ctx.lineTo(bagX-10, bagY+18);
+  ctx.quadraticCurveTo(bagX-25, bagY+5, bagX-22, bagY-25);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,0.2)'; ctx.lineWidth = 1.5;
+  ctx.stroke();
 
-  // Hand scooping from bag
-  var handX = bagX + 15 + phase * 60;
-  var handY = bagY - 5 - phase * 30;
+  // Bag fold
+  ctx.fillStyle = '#7A5A10';
+  ctx.beginPath();
+  ctx.moveTo(bagX-22, bagY-25);
+  ctx.quadraticCurveTo(bagX-5, bagY-30, bagX+5, bagY-22);
+  ctx.quadraticCurveTo(bagX-5, bagY-22, bagX-22, bagY-25);
+  ctx.fill();
+
+  // Label on bag
+  ctx.fillStyle = 'rgba(200,169,81,0.8)';
+  ctx.font = 'bold 7px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText('COFFEE', bagX+1, bagY+5);
+
+  // Hand + scoop animation
+  var scoopPhase = Math.min(progress * 2, 1);
+  var returnPhase = Math.max(0, Math.min((progress - 0.4) * 3, 1));
+  var handX, handY;
+
+  if (scoopPhase < 0.5) {
+    // Moving toward bag
+    var t = scoopPhase * 2;
+    handX = bagX + 10 + t * 30;
+    handY = bagY - 10 - t * 20;
+  } else {
+    // Moving toward scale
+    var t = (scoopPhase - 0.5) * 2;
+    handX = bagX + 40 + t * 50;
+    handY = bagY - 30 - t * 70;
+  }
+
   // Arm
-  ctx.strokeStyle = '#C8A080'; ctx.lineWidth = 4; ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.moveTo(bagX+5, bagY-10); ctx.lineTo(handX, handY); ctx.stroke();
+  ctx.strokeStyle = '#C89670'; ctx.lineWidth = 5; ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(bagX, bagY - 10);
+  ctx.quadraticCurveTo(handX - 10, handY + 10, handX, handY);
+  ctx.stroke();
+  ctx.strokeStyle = '#D4A580'; ctx.lineWidth = 3;
+  ctx.stroke();
+
   // Hand
-  ctx.fillStyle = '#D4A574'; ctx.beginPath(); ctx.arc(handX, handY, 7, 0, Math.PI*2); ctx.fill();
+  var skinGrad = ctx.createRadialGradient(handX, handY, 1, handX, handY, 8);
+  skinGrad.addColorStop(0, '#E8C8A8'); skinGrad.addColorStop(1, '#C89670');
+  ctx.fillStyle = skinGrad;
+  ctx.beginPath(); ctx.arc(handX, handY, 8, 0, Math.PI*2); ctx.fill();
+
   // Scoop
-  ctx.fillStyle = '#999'; ctx.beginPath(); ctx.ellipse(handX-4, handY+3, 7, 4, -0.3, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#A0A0A0';
+  ctx.beginPath(); ctx.ellipse(handX - 6, handY + 4, 10, 5, -0.2, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#C0C0C0';
+  ctx.beginPath(); ctx.ellipse(handX - 6, handY + 2, 8, 3.5, -0.2, 0, Math.PI*2); ctx.fill();
 
-  // Beans on scale platform
-  var beanCount = Math.floor(phase * 20);
-  for (var i = 0; i < Math.min(beanCount, 20); i++) {
-    var bx = cx - 30 + (i%5)*12 + Math.sin(i*1.7)*4;
-    var by = y - 8 - Math.floor(i/5)*5 + Math.cos(i*2.1)*3;
-    ctx.fillStyle = '#4A3020'; ctx.beginPath();
-    ctx.ellipse(bx, by, 3.5, 2.5, 0.4, 0, Math.PI*2); ctx.fill();
-    // Highlight
-    ctx.fillStyle = 'rgba(120,80,40,0.4)'; ctx.beginPath();
-    ctx.arc(bx-0.5, by-1, 1.5, 0, Math.PI*2); ctx.fill();
+  // Beans on scale
+  var beanCount = Math.floor(progress * 18);
+  for (var i = 0; i < Math.min(beanCount, 18); i++) {
+    var bx = cx - 35 + (i % 6) * 13 + Math.sin(i * 2.1) * 5;
+    var by = scaleY - 8 - Math.floor(i / 6) * 6 + Math.cos(i * 1.7) * 4;
+    // Bean shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
+    ctx.beginPath(); ctx.ellipse(bx + 1, by + 1, 4, 2.8, 0.5, 0, Math.PI*2); ctx.fill();
+    // Bean body
+    var beanGrad = ctx.createRadialGradient(bx - 1, by - 1, 0.5, bx, by, 4);
+    beanGrad.addColorStop(0, '#7A5030'); beanGrad.addColorStop(0.5, '#5A3020');
+    beanGrad.addColorStop(1, '#3A2010');
+    ctx.fillStyle = beanGrad;
+    ctx.beginPath(); ctx.ellipse(bx, by, 4, 2.8, 0.5, 0, Math.PI*2); ctx.fill();
+    // Bean crease
+    ctx.strokeStyle = 'rgba(30,15,5,0.4)'; ctx.lineWidth = 0.6;
+    ctx.beginPath();
+    ctx.moveTo(bx - 2, by - 0.5); ctx.quadraticCurveTo(bx, by + 1, bx + 1, by + 0.5);
+    ctx.stroke();
   }
 
-  // Beans falling (during mid-scoop)
-  if (phase > 0.2 && phase < 0.8) {
-    for (i = 0; i < 3; i++) {
-      var fx = handX - 10 + Math.random()*20;
-      var fy = handY + 8 + Math.random()*30;
-      ctx.fillStyle = '#5A3A20'; ctx.beginPath();
-      ctx.ellipse(fx, fy, 2.5, 1.8, 0.5+Math.random()*0.5, 0, Math.PI*2); ctx.fill();
+  // Falling beans
+  if (scoopPhase > 0.2 && scoopPhase < 0.9) {
+    for (var j = 0; j < 4; j++) {
+      var fx = handX - 12 + Math.random() * 24;
+      var fy = handY + 5 + Math.random() * 40;
+      ctx.fillStyle = 'rgba(90,50,25,0.8)';
+      ctx.beginPath(); ctx.ellipse(fx, fy, 3, 2, 0.6 + Math.random() * 0.4, 0, Math.PI*2); ctx.fill();
     }
   }
 }
 
 // ==========================================
-// GRINDING (step 1) - detailed grinder
+// GRINDING - detailed grinder with animation
 // ==========================================
 
-function drawGrinding(ctx, cx, H, timer, total, progress, step) {
-  if (step < 1) return;
-  var gy = H - 240;
-  var grindProgress = step === 1 ? Math.min(progress * 10, 1) : 1;
+function drawGrinding(ctx, cx, H, timer, total, activeStep) {
+  if (activeStep < 1) return;
+  var gx = cx + 80, gy = H - 200;
+  var grindProgress = activeStep === 1 ? Math.min(timer / total * 10, 1) : 1;
 
-  // Grinder base
-  var baseGrad = ctx.createLinearGradient(cx-26, gy, cx+26, gy);
-  baseGrad.addColorStop(0, '#5A4A36'); baseGrad.addColorStop(0.3, '#6B5B44');
-  baseGrad.addColorStop(0.5, '#7A6A50'); baseGrad.addColorStop(0.7, '#6B5B44');
-  baseGrad.addColorStop(1, '#4A3A28');
-  ctx.fillStyle = baseGrad;
-  roundRect(ctx, cx-26, gy+8, 52, 28, 5);
+  // === Grinder body (wood+metal style) ===
+  // Shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.beginPath(); ctx.ellipse(gx, gy + 68, 30, 5, 0, 0, Math.PI*2); ctx.fill();
 
-  // Collection drawer
-  ctx.fillStyle = '#4A3A2A'; roundRect(ctx, cx-14, gy+36, 28, 8, 3);
+  // Wooden base
+  var woodGrad = ctx.createLinearGradient(gx - 24, 0, gx + 24, 0);
+  woodGrad.addColorStop(0, '#8B6B4A'); woodGrad.addColorStop(0.3, '#A08060');
+  woodGrad.addColorStop(0.5, '#B09070'); woodGrad.addColorStop(0.7, '#A08060');
+  woodGrad.addColorStop(1, '#7A5A3A');
+  ctx.fillStyle = woodGrad;
+  roundRect(ctx, gx - 24, gy + 38, 48, 30, 6);
 
-  // Main body
-  var bodyGrad = ctx.createLinearGradient(cx-18, gy-20, cx+18, gy-20);
-  bodyGrad.addColorStop(0, '#7A6A55'); bodyGrad.addColorStop(0.4, '#8B7B64');
-  bodyGrad.addColorStop(1, '#5A4A38');
-  ctx.fillStyle = bodyGrad; roundRect(ctx, cx-18, gy-15, 36, 26, 4);
+  // Drawer
+  ctx.fillStyle = '#6B5030';
+  roundRect(ctx, gx - 14, gy + 62, 28, 8, 3);
+  ctx.fillStyle = '#4A3020';
+  ctx.beginPath(); ctx.arc(gx, gy + 66, 2.5, 0, Math.PI*2); ctx.fill();
 
-  // Hopper
-  ctx.fillStyle = '#8A7A60';
+  // Main body (brass/metal)
+  var metalGrad = ctx.createLinearGradient(gx - 18, 0, gx + 18, 0);
+  metalGrad.addColorStop(0, '#9A8A6A'); metalGrad.addColorStop(0.3, '#BAAA8A');
+  metalGrad.addColorStop(0.5, '#CABB9A'); metalGrad.addColorStop(0.7, '#BAAA8A');
+  metalGrad.addColorStop(1, '#8A7A5A');
+  ctx.fillStyle = metalGrad;
+  roundRect(ctx, gx - 18, gy + 10, 36, 30, 4);
+
+  // Brand plate
+  ctx.fillStyle = '#D4B896';
+  roundRect(ctx, gx - 8, gy + 22, 16, 10, 2);
+  ctx.fillStyle = '#6B5030';
+  ctx.font = 'bold 5px serif'; ctx.textAlign = 'center';
+  ctx.fillText('HARIO', gx, gy + 30);
+
+  // Hopper (semi-transparent)
+  var hopGrad = ctx.createLinearGradient(gx, gy - 10, gx, gy + 10);
+  hopGrad.addColorStop(0, 'rgba(200,190,180,0.5)');
+  hopGrad.addColorStop(1, 'rgba(160,150,140,0.3)');
+  ctx.fillStyle = hopGrad;
   ctx.beginPath();
-  ctx.moveTo(cx-14, gy-15); ctx.lineTo(cx-10, gy-32);
-  ctx.quadraticCurveTo(cx, gy-36, cx+10, gy-32);
-  ctx.lineTo(cx+14, gy-15); ctx.closePath(); ctx.fill();
-  ctx.strokeStyle = '#5A4A38'; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.moveTo(gx - 14, gy + 10);
+  ctx.lineTo(gx - 11, gy - 25);
+  ctx.quadraticCurveTo(gx, gy - 32, gx + 11, gy - 25);
+  ctx.lineTo(gx + 14, gy + 10);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(100,80,60,0.4)'; ctx.lineWidth = 1.5;
+  ctx.stroke();
 
-  // Beans in hopper (decrease as grinding progresses)
-  var remaining = step === 1 ? Math.max(0, 6 - Math.floor(grindProgress * 8)) : 0;
-  for (var i = 0; i < remaining; i++) {
-    var bx = cx - 5 + (i%3)*5, by = gy - 27 + Math.floor(i/3)*5;
-    ctx.fillStyle = '#3A2010'; ctx.beginPath();
-    ctx.ellipse(bx, by, 2.2, 1.6, 0.3, 0, Math.PI*2); ctx.fill();
+  // Beans in hopper (decrease as grinding)
+  var beansLeft = activeStep === 1 ? Math.max(0, 8 - Math.floor(grindProgress * 10)) : 0;
+  for (var i = 0; i < beansLeft; i++) {
+    var bx = gx - 5 + (i % 3) * 6;
+    var by = gy - 18 + Math.floor(i / 3) * 6;
+    ctx.fillStyle = '#4A2818';
+    ctx.beginPath(); ctx.ellipse(bx, by, 3, 2, 0.4, 0, Math.PI*2); ctx.fill();
   }
 
-  // Rotating handle
-  var speed = step >= 2 ? 0 : 4;
-  var angle = timer * speed;
-  var px = cx + 18, py = gy - 5;
-  ctx.strokeStyle = '#7A6040'; ctx.lineWidth = 3.5; ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.moveTo(px, py);
-  ctx.lineTo(px + Math.cos(angle)*32, py + Math.sin(angle)*3); ctx.stroke();
-  // Handle knob
-  var kx = px + Math.cos(angle)*32, ky = py + Math.sin(angle)*3;
-  var knobGrad = ctx.createRadialGradient(kx, ky, 1, kx, ky, 7);
-  knobGrad.addColorStop(0, '#C8A878'); knobGrad.addColorStop(1, '#7A5A38');
-  ctx.fillStyle = knobGrad; ctx.beginPath(); ctx.arc(kx, ky, 7, 0, Math.PI*2); ctx.fill();
+  // === Rotating crank handle ===
+  var crankSpeed = activeStep >= 2 ? 0 : 3.5;
+  var angle = timer * crankSpeed;
+  var px = gx + 16, py = gy + 5;
+  // Crank arm
+  ctx.strokeStyle = '#7A6A4A'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(px, py);
+  ctx.lineTo(px + Math.cos(angle) * 28, py + Math.sin(angle) * 3);
+  ctx.stroke();
+  // Knob
+  var kx = px + Math.cos(angle) * 28;
+  var ky = py + Math.sin(angle) * 3;
+  var knobGrad = ctx.createRadialGradient(kx - 1, ky - 1, 1, kx, ky, 8);
+  knobGrad.addColorStop(0, '#D4B896'); knobGrad.addColorStop(1, '#8B6B4A');
+  ctx.fillStyle = knobGrad;
+  ctx.beginPath(); ctx.arc(kx, ky, 8, 0, Math.PI*2); ctx.fill();
 
-  // Ground coffee pile in drawer
-  if (grindProgress > 0.15) {
-    var pileH = Math.min(grindProgress * 12, 12);
-    ctx.fillStyle = '#4A2818'; ctx.beginPath();
-    ctx.ellipse(cx, gy+34, 12, pileH*0.4, 0, 0, Math.PI*2); ctx.fill();
-    // Texture
-    for (i = 0; i < 6; i++) {
-      ctx.fillStyle = 'rgba(60,25,10,0.6)'; ctx.beginPath();
-      ctx.arc(cx-6+(i%3)*6, gy+33-Math.random()*pileH, 1.5, 0, Math.PI*2); ctx.fill();
+  // === Ground coffee in drawer ===
+  if (grindProgress > 0.1) {
+    var pileH = Math.min(grindProgress * 16, 16);
+    var groundsGrad = ctx.createRadialGradient(gx, gy + 58, 0, gx, gy + 58, 14);
+    groundsGrad.addColorStop(0, '#6B3A20'); groundsGrad.addColorStop(1, '#3A1A0A');
+    ctx.fillStyle = groundsGrad;
+    ctx.beginPath();
+    ctx.ellipse(gx, gy + 60, 12 + pileH * 0.3, pileH * 0.4, 0, 0, Math.PI*2);
+    ctx.fill();
+
+    // Grounds texture dots
+    for (var t = 0; t < 12; t++) {
+      var tx = gx - 8 + (t % 4) * 6;
+      var ty = gy + 58 - Math.random() * pileH;
+      ctx.fillStyle = 'rgba(40,15,5,0.5)';
+      ctx.beginPath(); ctx.arc(tx, ty, 1.2, 0, Math.PI*2); ctx.fill();
     }
   }
 
-  // Falling grounds particles (during grinding)
-  if (step === 1 && grindProgress > 0.1 && grindProgress < 0.9) {
-    for (i = 0; i < 4; i++) {
-      ctx.fillStyle = 'rgba(70,35,15,0.7)'; ctx.beginPath();
-      ctx.arc(cx-4+(i%2)*8, gy+8+Math.random()*25, 1.2, 0, Math.PI*2); ctx.fill();
+  // Falling grounds during grinding
+  if (activeStep === 1 && grindProgress > 0.05 && grindProgress < 0.95) {
+    for (var f = 0; f < 5; f++) {
+      var ptx = gx - 6 + (f % 2) * 12;
+      var pty = gy + 15 + Math.random() * 45;
+      var ptAlpha = 0.4 + Math.random() * 0.4;
+      ctx.fillStyle = 'rgba(80,40,20,' + ptAlpha + ')';
+      ctx.beginPath(); ctx.arc(ptx, pty, 1.5, 0, Math.PI*2); ctx.fill();
     }
   }
 }
 
 // ==========================================
-// CARAFE
+// CARAFE - glass server with highlights
 // ==========================================
 
-function drawCarafe(ctx, cx, H, progress, step) {
-  var bot = H - 50, top = bot - 140, wTop = 26, wBot = 36;
+function drawCarafe(ctx, cx, H, activeStep) {
+  var bot = H - 28, top = bot - 150, wTop = 28, wBot = 38;
 
-  var g = ctx.createLinearGradient(cx-wBot, 0, cx+wBot, 0);
-  g.addColorStop(0, 'rgba(180,200,220,0.12)'); g.addColorStop(0.25, 'rgba(220,235,250,0.28)');
-  g.addColorStop(0.5, 'rgba(240,248,255,0.32)'); g.addColorStop(0.75, 'rgba(220,235,250,0.28)');
-  g.addColorStop(1, 'rgba(180,200,220,0.12)');
+  // Shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.2)';
+  ctx.beginPath(); ctx.ellipse(cx, bot + 2, wBot + 4, 5, 0, 0, Math.PI*2); ctx.fill();
 
-  ctx.fillStyle = g; ctx.strokeStyle = 'rgba(190,210,230,0.45)'; ctx.lineWidth = 2;
+  // Glass body with gradient
+  var gGrad = ctx.createLinearGradient(cx - wBot, 0, cx + wBot, 0);
+  gGrad.addColorStop(0, 'rgba(170,195,215,0.15)');
+  gGrad.addColorStop(0.2, 'rgba(210,230,248,0.32)');
+  gGrad.addColorStop(0.45, 'rgba(235,245,255,0.38)');
+  gGrad.addColorStop(0.55, 'rgba(235,245,255,0.38)');
+  gGrad.addColorStop(0.8, 'rgba(210,230,248,0.32)');
+  gGrad.addColorStop(1, 'rgba(170,195,215,0.15)');
+
+  ctx.fillStyle = gGrad;
+  ctx.strokeStyle = 'rgba(180,200,220,0.5)';
+  ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(cx-wTop, top); ctx.lineTo(cx-wBot, bot);
-  ctx.quadraticCurveTo(cx, bot+6, cx+wBot, bot);
-  ctx.lineTo(cx+wTop, top); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.moveTo(cx - wTop, top);
+  ctx.lineTo(cx - wBot, bot);
+  ctx.quadraticCurveTo(cx, bot + 6, cx + wBot, bot);
+  ctx.lineTo(cx + wTop, top);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
 
   // Rim
-  ctx.strokeStyle = 'rgba(200,220,240,0.55)'; ctx.lineWidth = 2.2;
-  ctx.beginPath(); ctx.ellipse(cx, top, wTop+2, 5, 0, 0, Math.PI*2); ctx.stroke();
+  ctx.strokeStyle = 'rgba(190,210,230,0.6)'; ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.ellipse(cx, top, wTop + 3, 6, 0, 0, Math.PI*2); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.ellipse(cx, top - 1, wTop + 1, 4, 0, 0, Math.PI*2); ctx.stroke();
+
+  // Spout (left side)
+  ctx.strokeStyle = 'rgba(190,210,230,0.45)'; ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(cx - wTop + 2, top + 4);
+  ctx.quadraticCurveTo(cx - wTop - 18, top - 3, cx - wTop - 14, top + 8);
+  ctx.stroke();
+
+  // Handle (right side)
+  ctx.strokeStyle = 'rgba(190,210,230,0.4)'; ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(cx + wTop + 4, top + 18);
+  ctx.quadraticCurveTo(cx + wBot + 28, top + 30, cx + wBot + 22, top + 75);
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(cx + wTop + 5, top + 19);
+  ctx.quadraticCurveTo(cx + wBot + 26, top + 30, cx + wBot + 20, top + 73);
+  ctx.stroke();
 
   // Measurement marks
-  ctx.strokeStyle = 'rgba(255,255,255,0.12)'; ctx.lineWidth = 0.8;
-  for (var i = 0; i < 3; i++) {
-    var my = bot - 20 - i*38; ctx.beginPath();
-    ctx.moveTo(cx-28, my); ctx.lineTo(cx-18, my); ctx.stroke();
-    ctx.fillStyle = 'rgba(255,255,255,0.1)'; ctx.font = '7px sans-serif'; ctx.textAlign = 'right';
-    ctx.fillText((i+1)*100+'ml', cx-19, my+3);
+  for (var i = 0; i < 4; i++) {
+    var my = bot - 10 - i * 35;
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)'; ctx.lineWidth = 0.8;
+    ctx.beginPath(); ctx.moveTo(cx - 30, my); ctx.lineTo(cx - 18, my); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.font = '7px sans-serif'; ctx.textAlign = 'right';
+    ctx.fillText((i + 1) * 100 + 'ml', cx - 19, my + 3);
   }
-
-  // Handle
-  ctx.strokeStyle = 'rgba(190,210,230,0.35)'; ctx.lineWidth = 2.5;
-  ctx.beginPath(); ctx.moveTo(cx+wTop+4, top+20);
-  ctx.quadraticCurveTo(cx+wBot+25, top+30, cx+wBot+20, top+75); ctx.stroke();
-
-  // Spout
-  ctx.beginPath(); ctx.moveTo(cx-wTop-2, top+5);
-  ctx.quadraticCurveTo(cx-wTop-18, top-2, cx-wTop-12, top+8); ctx.stroke();
 }
 
 // ==========================================
-// DRIPPER (V60 cone)
+// DRIPPER - V60 with filter & coffee bed
 // ==========================================
 
-function drawDripper(ctx, cx, H, timer, total, progress, step) {
-  var carafeTop = H - 50 - 140, dTop = carafeTop - 10, dBot = carafeTop + 38, dW = 32;
+function drawDripper(ctx, cx, H, timer, total, activeStep) {
+  var carafeTop = H - 28 - 150;
+  var dTop = carafeTop - 16;
+  var dBot = carafeTop + 42;
+  var dW = 34;
 
-  var coneGrad = ctx.createLinearGradient(cx-dW, dTop, cx+dW, dTop);
-  coneGrad.addColorStop(0, '#E0D0BA'); coneGrad.addColorStop(0.3, '#F0E5D5');
-  coneGrad.addColorStop(0.5, '#F5EDE2'); coneGrad.addColorStop(0.7, '#E8D8C4');
-  coneGrad.addColorStop(1, '#C8B498');
-
-  ctx.fillStyle = coneGrad; ctx.strokeStyle = 'rgba(160,135,105,0.5)'; ctx.lineWidth = 1.8;
+  // Filter paper above rim (white, slightly wavy)
+  ctx.fillStyle = 'rgba(252,250,248,0.35)';
   ctx.beginPath();
-  ctx.moveTo(cx-dW, dTop); ctx.lineTo(cx-11, dBot);
-  ctx.lineTo(cx+11, dBot); ctx.lineTo(cx+dW, dTop); ctx.closePath();
-  ctx.fill(); ctx.stroke();
+  ctx.moveTo(cx - dW - 3, dTop - 8);
+  ctx.quadraticCurveTo(cx - dW + 2, dTop - 2, cx - dW + 4, dTop + 4);
+  ctx.lineTo(cx - dW + 4, dTop + 12);
+  ctx.quadraticCurveTo(cx, dTop + 20, cx + dW - 4, dTop + 12);
+  ctx.lineTo(cx + dW - 4, dTop + 4);
+  ctx.quadraticCurveTo(cx + dW - 2, dTop - 2, cx + dW + 3, dTop - 8);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(200,195,185,0.3)'; ctx.lineWidth = 1;
+  ctx.stroke();
 
-  // Ribs
-  ctx.strokeStyle = 'rgba(170,145,120,0.3)'; ctx.lineWidth = 1.2;
-  for (var i = -3; i <= 3; i++) {
-    var rx = cx + i*(dW-9)/3.5;
-    ctx.beginPath(); ctx.moveTo(rx, dTop+8); ctx.lineTo(cx+i*4.5, dBot-3); ctx.stroke();
+  // V60 cone body (ceramic)
+  var coneGrad = ctx.createLinearGradient(cx - dW, 0, cx + dW, 0);
+  coneGrad.addColorStop(0, '#D8C4A8');
+  coneGrad.addColorStop(0.25, '#EDE0D0');
+  coneGrad.addColorStop(0.5, '#F5EDE2');
+  coneGrad.addColorStop(0.75, '#E8D8C4');
+  coneGrad.addColorStop(1, '#C0A888');
+
+  ctx.fillStyle = coneGrad;
+  ctx.strokeStyle = 'rgba(150,125,95,0.5)'; ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(cx - dW, dTop);
+  ctx.lineTo(cx - 12, dBot);
+  ctx.lineTo(cx + 12, dBot);
+  ctx.lineTo(cx + dW, dTop);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // Spiral ribs
+  ctx.strokeStyle = 'rgba(160,135,105,0.35)'; ctx.lineWidth = 1.2;
+  for (var r = -3; r <= 3; r++) {
+    var rx = cx + r * (dW - 10) / 3.5;
+    ctx.beginPath();
+    ctx.moveTo(rx, dTop + 6);
+    ctx.lineTo(cx + r * 5, dBot - 4);
+    ctx.stroke();
   }
 
   // Rim
-  ctx.strokeStyle = 'rgba(170,140,110,0.6)'; ctx.lineWidth = 2.5;
-  ctx.beginPath(); ctx.ellipse(cx, dTop, dW, 5.5, 0, 0, Math.PI*2); ctx.stroke();
+  ctx.strokeStyle = 'rgba(160,130,100,0.65)'; ctx.lineWidth = 2.8;
+  ctx.beginPath(); ctx.ellipse(cx, dTop, dW + 1, 6, 0, 0, Math.PI*2); ctx.stroke();
+  // Inner rim shadow
+  ctx.strokeStyle = 'rgba(0,0,0,0.15)'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.ellipse(cx, dTop + 1, dW - 3, 4, 0, 0, Math.PI*2); ctx.stroke();
 
-  // Bottom hole
-  ctx.fillStyle = '#3A2210'; ctx.beginPath(); ctx.arc(cx, dBot, 3.5, 0, Math.PI*2); ctx.fill();
+  // Bottom opening
+  ctx.fillStyle = '#2A1808';
+  ctx.beginPath(); ctx.arc(cx, dBot, 4, 0, Math.PI*2); ctx.fill();
 
-  // Filter paper visible above rim
-  ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(cx-dW+2, dTop-2);
-  ctx.quadraticCurveTo(cx, dTop+4, cx+dW-2, dTop-2); ctx.stroke();
+  // Coffee bed (bloom + settled)
+  drawCoffeeBed(ctx, cx, dTop, dBot, dW, timer, total, activeStep);
 }
 
-function drawCoffeeBed(ctx, cx, H, timer, total, progress, step) {
-  var dTop = H - 50 - 140 - 10, bedY = dTop + 22;
-  ctx.fillStyle = '#3A1E0E'; ctx.beginPath();
-  ctx.ellipse(cx, bedY, 26, 6, 0, 0, Math.PI*2); ctx.fill();
-  // Texture
-  for (var i = 0; i < 7; i++) {
-    ctx.fillStyle = 'rgba(50,22,8,0.5)'; ctx.beginPath();
-    ctx.arc(cx-20+i*7+Math.sin(i)*3, bedY+Math.cos(i)*2.5, 1.8, 0, Math.PI*2); ctx.fill();
-  }
-}
+function drawCoffeeBed(ctx, cx, dTop, dBot, dW, timer, total, activeStep) {
+  var bedY = dTop + 26;
+  var bedW = dW - 8;
 
-// ==========================================
-// KETTLE & POURING (step 3)
-// ==========================================
+  if (activeStep >= 3) {
+    // Blooming bed (swells during initial pour)
+    var pourStart = total * 0.42;
+    var pourElapsed = Math.max(0, timer - pourStart);
+    var bloomPhase = Math.min(pourElapsed / 12, 1); // bloom within first 12s
+    var bedH = 8 + bloomPhase * 8;
+    if (bloomPhase > 1) bedH = 16 - Math.min((bloomPhase - 1) * 0.5, 10);
 
-function drawKettleAndPour(ctx, cx, H, timer, total, progress, step) {
-  if (step < 3) return;
-  var pourStart = total * 0.42, pourElapsed = Math.max(0, timer - pourStart);
-  var pourPhase = Math.min(pourElapsed / Math.max(total * 0.48, 1), 1.15);
-  if (pourPhase <= 0.01) return;
+    var bedGrad = ctx.createRadialGradient(cx, bedY, 2, cx, bedY, bedW);
+    bedGrad.addColorStop(0, '#4A2818');
+    bedGrad.addColorStop(0.5, '#3A1A0A');
+    bedGrad.addColorStop(1, '#2A1005');
+    ctx.fillStyle = bedGrad;
+    ctx.beginPath();
+    ctx.ellipse(cx, bedY, bedW, Math.max(bedH, 5), 0, 0, Math.PI*2);
+    ctx.fill();
 
-  // Determine kettle type
-  var kettleItem = G.selection && G.owned ? bestOwned('kettle') : null;
-  var isTemp = kettleItem && kettleItem.id === 'kettle_temp';
-  var kettle = bestOwned('kettle');
+    // Texture on bed
+    for (var i = 0; i < 10; i++) {
+      var tx = cx - bedW + 5 + i * (bedW * 2 / 10);
+      var ty = bedY - 2 + Math.sin(i * 1.8) * 3;
+      ctx.fillStyle = 'rgba(30,10,3,0.5)';
+      ctx.beginPath(); ctx.arc(tx, ty, 2, 0, Math.PI*2); ctx.fill();
+    }
 
-  var kx = cx + 42 + Math.sin(pourPhase*Math.PI*0.85)*28;
-  var ky = H - 255 + Math.cos(pourPhase*1.05)*12;
-  var spoutX = kx - 45, spoutY = ky + 12;
-  var dripperTop = H - 50 - 140 - 10, targetX = cx + Math.sin(pourPhase*4.2)*16, targetY = dripperTop + 14;
-
-  // Kettle body
-  if (isTemp) {
-    // Premium temp-controlled: dark body, LED screen
-    var kg = ctx.createLinearGradient(kx-30, ky, kx+30, ky);
-    kg.addColorStop(0, '#2A2A2A'); kg.addColorStop(0.4, '#3D3D3D');
-    kg.addColorStop(0.5, '#4A4A4A'); kg.addColorStop(0.6, '#3D3D3D');
-    kg.addColorStop(1, '#222');
-    ctx.fillStyle = kg;
-  } else {
-    // Basic: brushed stainless steel
-    var kg = ctx.createLinearGradient(kx-30, ky, kx+30, ky);
-    kg.addColorStop(0, '#AAA'); kg.addColorStop(0.3, '#D0D0D0');
-    kg.addColorStop(0.5, '#E8E8E8'); kg.addColorStop(0.7, '#C8C8C8');
-    kg.addColorStop(1, '#999');
-    ctx.fillStyle = kg;
-  }
-  ctx.beginPath(); ctx.ellipse(kx, ky, 30, 20, 0, 0, Math.PI*2); ctx.fill();
-  ctx.strokeStyle = isTemp ? '#555' : '#888'; ctx.lineWidth = 1.8;
-  ctx.beginPath(); ctx.ellipse(kx, ky, 30, 20, 0, 0, Math.PI*2); ctx.stroke();
-
-  // Lid
-  ctx.fillStyle = isTemp ? '#3A3A3A' : '#B0B0B0';
-  ctx.beginPath(); ctx.arc(kx, ky-16, 12, 0, Math.PI*2); ctx.fill();
-  // Lid knob
-  ctx.fillStyle = isTemp ? '#555' : '#888';
-  ctx.beginPath(); ctx.arc(kx, ky-18, 4, 0, Math.PI*2); ctx.fill();
-
-  // Temperature display (only temp-controlled)
-  if (isTemp) {
-    ctx.fillStyle = '#0A0A0A'; roundRect(ctx, kx-10, ky+4, 20, 9, 2);
-    ctx.fillStyle = '#4ADE80'; ctx.font = '7px monospace'; ctx.textAlign = 'center';
-    ctx.fillText('93°C', kx, ky+11);
-  }
-
-  // Gooseneck spout
-  ctx.strokeStyle = isTemp ? '#444' : '#AAA'; ctx.lineWidth = 2.8;
-  ctx.beginPath(); ctx.moveTo(kx-24, ky-2);
-  ctx.quadraticCurveTo(kx-42, ky-10, spoutX, spoutY); ctx.stroke();
-  // Spout tip
-  ctx.fillStyle = isTemp ? '#333' : '#999';
-  ctx.beginPath(); ctx.arc(spoutX, spoutY, 3, 0, Math.PI*2); ctx.fill();
-
-  // Handle
-  ctx.strokeStyle = '#555'; ctx.lineWidth = 3;
-  ctx.beginPath(); ctx.moveTo(kx+22, ky-6);
-  ctx.quadraticCurveTo(kx+42, ky-12, kx+38, ky+10);
-  ctx.quadraticCurveTo(kx+40, ky+20, kx+24, ky+6); ctx.stroke();
-
-  // Water stream
-  var sg = ctx.createLinearGradient(spoutX, spoutY, targetX, targetY);
-  sg.addColorStop(0, 'rgba(175,205,235,0.75)'); sg.addColorStop(0.5, 'rgba(155,190,220,0.8)');
-  sg.addColorStop(1, 'rgba(135,170,200,0.35)');
-  ctx.strokeStyle = sg; ctx.lineWidth = 5.5+Math.sin(pourPhase*10)*2; ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.moveTo(spoutX, spoutY);
-  ctx.quadraticCurveTo((spoutX+targetX)/2-5, (spoutY+targetY)/2+3, targetX, targetY); ctx.stroke();
-
-  // Secondary thin stream
-  ctx.strokeStyle = 'rgba(175,205,235,0.35)'; ctx.lineWidth = 2.5+Math.sin(pourPhase*12)*1.2;
-  ctx.beginPath(); ctx.moveTo(spoutX-2, spoutY+1);
-  ctx.quadraticCurveTo((spoutX+targetX)/2-7, (spoutY+targetY)/2+5, targetX-1, targetY); ctx.stroke();
-
-  // Splash
-  ctx.fillStyle = 'rgba(185,210,235,'+(0.4+Math.random()*0.3)+')';
-  ctx.beginPath(); ctx.arc(targetX, targetY, 6+Math.random()*3, 0, Math.PI*2); ctx.fill();
-  // Droplets
-  for (var i=0; i<3; i++) {
-    ctx.fillStyle = 'rgba(195,220,240,0.55)'; ctx.beginPath();
-    ctx.arc(targetX+(Math.random()-0.5)*18, targetY-Math.random()*7, 1.3, 0, Math.PI*2); ctx.fill();
-  }
-}
-
-function drawSwirl(ctx, cx, H, timer, total, progress) {
-  var pStart = total*0.44, pElapsed = Math.max(0, timer - pStart);
-  if (pElapsed < 3) return;
-  var y = H - 50 - 140 - 10 + 26;
-  swirlAngle += 0.07;
-  ctx.fillStyle = 'rgba(190,170,140,0.18)';
-  for (var i=0; i<3; i++) {
-    var a = swirlAngle+i*2.1, rx = cx+Math.cos(a)*12, ry = y+Math.sin(a*0.7)*3;
-    ctx.beginPath(); ctx.arc(rx, ry, 2.5+i, 0, Math.PI*2); ctx.fill();
-  }
-}
-
-function drawCoffeeLevel(ctx, cx, H, timer, total, progress) {
-  var pStart = total*0.42, pElapsed = Math.max(0, timer - pStart);
-  var pPhase = Math.min(pElapsed / Math.max(total*0.48, 1), 1);
-  if (pPhase <= 0.04) return;
-
-  var bot = H-50, maxH = 90, fillH = Math.min(pPhase*maxH, maxH), top = bot-fillH;
-  var wTop = 26+(fillH/maxH)*10, wBot = 36;
-
-  var cg = ctx.createLinearGradient(0, top, 0, bot);
-  cg.addColorStop(0, 'rgba(45,18,4,0.85)'); cg.addColorStop(1, 'rgba(22,8,1,0.95)');
-  ctx.fillStyle = cg; ctx.beginPath();
-  ctx.moveTo(cx-wTop, top); ctx.lineTo(cx-wBot, bot);
-  ctx.quadraticCurveTo(cx, bot+6, cx+wBot, bot);
-  ctx.lineTo(cx+wTop, top);
-  ctx.quadraticCurveTo(cx, top-3, cx-wTop, top); ctx.fill();
-
-  // Surface sheen
-  ctx.fillStyle = 'rgba(255,210,160,0.1)'; ctx.beginPath();
-  ctx.ellipse(cx, top, wTop-2, 1.5, 0, 0, Math.PI*2); ctx.fill();
-}
-
-// Steam
-function updateSteam(ctx, cx, H) {
-  var top = H-50-140-10;
-  if (steamParticles.length<45 && Math.random()<0.5) steamParticles.push({
-    x:cx+(Math.random()-0.5)*45, y:top+Math.random()*8,
-    vx:(Math.random()-0.5)*0.5, vy:-0.3-Math.random()*0.7, life:1, size:4+Math.random()*9, op:0.12+Math.random()*0.18
-  });
-  for (var i=steamParticles.length-1; i>=0; i--) {
-    var p=steamParticles[i]; p.x+=p.vx+Math.sin(p.y*0.02)*0.3; p.y+=p.vy; p.life-=0.005; p.size+=0.025;
-    if (p.life<=0||p.y<40) { steamParticles.splice(i,1); continue; }
-    var a=p.life*p.op, g=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.size);
-    g.addColorStop(0,'rgba(220,220,225,'+a+')'); g.addColorStop(0.6,'rgba(200,200,210,'+(a*0.5)+')');
-    g.addColorStop(1,'rgba(180,180,190,0)'); ctx.fillStyle=g; ctx.beginPath();
-    ctx.arc(p.x,p.y,p.size,0,Math.PI*2); ctx.fill();
-  }
-}
-
-// Drips
-function updateDrips(ctx, cx, H, timer, total, progress, step) {
-  if (step<3||step>4) return;
-  var dBot = H-50-140+38, pStart=total*0.42, pElapsed=Math.max(0,timer-pStart);
-  if (pElapsed<5) return;
-
-  if (Math.random()<0.3 && dripParticles.length<18) dripParticles.push({
-    x:cx+(Math.random()-0.5)*5, y:dBot, vy:0.6+Math.random()*2.5, life:1, size:1.5+Math.random()*2.5
-  });
-
-  var carafeTop=H-50-140, carafeBot=H-50;
-  for (var i=dripParticles.length-1;i>=0;i--) {
-    var p=dripParticles[i];
-    if (p.vx!==undefined) { p.x+=p.vx; p.y+=p.vy; p.life-=0.03;
-      if (p.life<=0) { dripParticles.splice(i,1); continue; }
-      ctx.fillStyle='rgba(95,45,18,'+p.life+')'; ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,Math.PI*2); ctx.fill();
-    } else {
-      p.y+=p.vy; p.vy+=0.12; p.life-=0.012;
-      if (p.y>carafeBot||p.life<=0) {
-        if (p.y>carafeTop) { for (var j=0;j<2;j++) dripParticles.push({x:p.x+(Math.random()-0.5)*8,y:p.y,vy:-1-Math.random()*2,vx:(Math.random()-0.5)*1.5,life:0.25,size:1.3}); }
-        dripParticles.splice(i,1); continue;
+    // Bubbles during bloom
+    if (bloomPhase < 1 && activeStep === 3) {
+      for (var b = 0; b < 3; b++) {
+        var bPhase = (bloomPhase + b * 0.3) % 1;
+        var bx = cx - 15 + b * 15;
+        var by = bedY - bedH - bPhase * 10;
+        ctx.fillStyle = 'rgba(200,170,140,' + ((1 - bPhase) * 0.4) + ')';
+        ctx.beginPath(); ctx.arc(bx, by, 2 + (1 - bPhase) * 4, 0, Math.PI*2); ctx.fill();
       }
-      ctx.fillStyle='rgba(85,38,12,'+p.life+')'; ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,Math.PI*2); ctx.fill();
-      ctx.fillStyle='rgba(75,30,8,'+(p.life*0.35)+')'; ctx.beginPath(); ctx.arc(p.x,p.y-p.size*1.3,p.size*0.6,0,Math.PI*2); ctx.fill();
+    }
+  } else {
+    // Dry bed
+    ctx.fillStyle = '#3A1E0E';
+    ctx.beginPath();
+    ctx.ellipse(cx, bedY, bedW, 6, 0, 0, Math.PI*2);
+    ctx.fill();
+
+    for (var i = 0; i < 8; i++) {
+      ctx.fillStyle = 'rgba(50,22,8,0.5)';
+      ctx.beginPath();
+      ctx.arc(cx - bedW + 4 + i * (bedW * 2 / 8), bedY + Math.cos(i) * 2, 2, 0, Math.PI*2);
+      ctx.fill();
     }
   }
 }
 
 // ==========================================
-// SERVE (step 4) - pour from carafe to glass
+// KETTLE & POUR - gooseneck kettle pouring
 // ==========================================
 
-function drawServe(ctx, cx, H, timer, total, progress) {
-  // Glass cup on the right side
-  var glassX = cx + 70, glassY = H - 50;
-  var servePhase = Math.min(progress * 10, 1);
+function drawKettleAndPour(ctx, cx, H, timer, total, activeStep) {
+  if (activeStep < 3) return;
+  var pourStart = total * 0.42;
+  var pourElapsed = Math.max(0, timer - pourStart);
+  var pourDuration = total * 0.48;
+  var pourPhase = Math.min(pourElapsed / Math.max(pourDuration, 1), 1.1);
+  if (pourPhase <= 0.01) return;
+
+  var kettle = bestOwned('kettle');
+  var isTemp = kettle && kettle.id === 'kettle_temp';
+
+  // Kettle position - moves in a controlled pouring arc
+  var kx = cx + 45 + Math.sin(pourPhase * Math.PI * 0.8) * 22;
+  var ky = H - 265 + Math.cos(pourPhase * 1.1) * 8;
+  var spoutX = kx - 48, spoutY = ky + 10;
+
+  // Dripper target
+  var dripperTop = H - 28 - 150 - 16;
+  var targetX = cx + Math.sin(pourPhase * 5.5) * 18;
+  var targetY = dripperTop + 10;
+
+  // === Kettle Body ===
+  if (isTemp) {
+    // Dark matte body (temp-controlled)
+    var kg = ctx.createLinearGradient(kx - 32, 0, kx + 32, 0);
+    kg.addColorStop(0, '#1A1A1E');
+    kg.addColorStop(0.3, '#2E2E32');
+    kg.addColorStop(0.5, '#3A3A3E');
+    kg.addColorStop(0.7, '#2E2E32');
+    kg.addColorStop(1, '#1A1A1E');
+    ctx.fillStyle = kg;
+  } else {
+    // Brushed stainless steel
+    var kg = ctx.createLinearGradient(kx - 32, 0, kx + 32, 0);
+    kg.addColorStop(0, '#A0A0A5');
+    kg.addColorStop(0.25, '#C8C8CD');
+    kg.addColorStop(0.5, '#E0E0E3');
+    kg.addColorStop(0.75, '#C0C0C5');
+    kg.addColorStop(1, '#909095');
+    ctx.fillStyle = kg;
+  }
+  ctx.beginPath(); ctx.ellipse(kx, ky, 32, 22, 0, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle = isTemp ? '#444' : '#909095'; ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Lid
+  ctx.fillStyle = isTemp ? '#2A2A2E' : '#B8B8BD';
+  ctx.beginPath(); ctx.arc(kx, ky - 18, 13, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle = isTemp ? '#444' : '#999'; ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Lid knob
+  ctx.fillStyle = isTemp ? '#444' : '#888';
+  ctx.beginPath(); ctx.arc(kx, ky - 21, 5, 0, Math.PI*2); ctx.fill();
+
+  // Temperature display
+  if (isTemp) {
+    ctx.fillStyle = '#0A0A0E';
+    roundRect(ctx, kx - 12, ky + 5, 24, 10, 3);
+    ctx.fillStyle = '#4ADE80'; ctx.font = 'bold 8px monospace'; ctx.textAlign = 'center';
+    ctx.fillText('93°C', kx, ky + 13);
+  }
+
+  // === Gooseneck Spout ===
+  ctx.strokeStyle = isTemp ? '#333' : '#B0B0B5'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(kx - 24, ky - 2);
+  ctx.quadraticCurveTo(kx - 44, ky - 12, spoutX, spoutY);
+  ctx.stroke();
+  ctx.strokeStyle = isTemp ? '#444' : '#D0D0D5'; ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Spout tip
+  ctx.fillStyle = isTemp ? '#222' : '#999';
+  ctx.beginPath(); ctx.arc(spoutX, spoutY, 3.5, 0, Math.PI*2); ctx.fill();
+
+  // === Handle ===
+  ctx.strokeStyle = '#555'; ctx.lineWidth = 3.5; ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(kx + 24, ky - 8);
+  ctx.quadraticCurveTo(kx + 46, ky - 14, kx + 42, ky + 12);
+  ctx.quadraticCurveTo(kx + 44, ky + 24, kx + 26, ky + 8);
+  ctx.stroke();
+  ctx.strokeStyle = '#777'; ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // === Water Stream ===
+  // Main stream
+  var streamGrad = ctx.createLinearGradient(spoutX, spoutY, targetX, targetY);
+  streamGrad.addColorStop(0, 'rgba(175,205,235,0.8)');
+  streamGrad.addColorStop(0.4, 'rgba(155,190,220,0.85)');
+  streamGrad.addColorStop(0.7, 'rgba(140,175,205,0.6)');
+  streamGrad.addColorStop(1, 'rgba(130,165,195,0.2)');
+  ctx.strokeStyle = streamGrad;
+  ctx.lineWidth = 5 + Math.sin(pourPhase * 8) * 2.5;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(spoutX, spoutY);
+  ctx.quadraticCurveTo(
+    (spoutX + targetX) / 2 - 8,
+    (spoutY + targetY) / 2 + 4,
+    targetX, targetY
+  );
+  ctx.stroke();
+
+  // Secondary thinner stream
+  ctx.strokeStyle = 'rgba(185,215,240,0.4)';
+  ctx.lineWidth = 2 + Math.sin(pourPhase * 10) * 1.5;
+  ctx.beginPath();
+  ctx.moveTo(spoutX - 3, spoutY + 1);
+  ctx.quadraticCurveTo(
+    (spoutX + targetX) / 2 - 12,
+    (spoutY + targetY) / 2 + 7,
+    targetX - 2, targetY + 1
+  );
+  ctx.stroke();
+
+  // === Splash at target ===
+  var splashAlpha = 0.4 + Math.random() * 0.35;
+  var splashGrad = ctx.createRadialGradient(targetX, targetY, 1, targetX, targetY, 8);
+  splashGrad.addColorStop(0, 'rgba(195,220,240,' + splashAlpha + ')');
+  splashGrad.addColorStop(1, 'rgba(175,200,220,0)');
+  ctx.fillStyle = splashGrad;
+  ctx.beginPath(); ctx.arc(targetX, targetY, 8 + Math.random() * 4, 0, Math.PI*2); ctx.fill();
+
+  // Splash droplets
+  for (var d = 0; d < 4; d++) {
+    var dx = targetX + (Math.random() - 0.5) * 20;
+    var dy = targetY - Math.random() * 10;
+    ctx.fillStyle = 'rgba(195,220,240,0.6)';
+    ctx.beginPath(); ctx.arc(dx, dy, 0.8 + Math.random() * 1.5, 0, Math.PI*2); ctx.fill();
+  }
+}
+
+// ==========================================
+// COFFEE LEVEL in carafe
+// ==========================================
+
+function drawCoffeeLevel(ctx, cx, H, timer, total) {
+  var pourStart = total * 0.42;
+  var pourElapsed = Math.max(0, timer - pourStart);
+  var pp = Math.min(pourElapsed / Math.max(total * 0.48, 1), 1);
+  if (pp <= 0.05) return;
+
+  var bot = H - 28;
+  var maxH = 100;
+  var fillH = Math.min(pp * maxH, maxH);
+  var top = bot - fillH;
+  var wTop = 28 + (fillH / maxH) * 10;
+  var wBot = 38;
+
+  // Coffee liquid
+  var cg = ctx.createLinearGradient(0, top, 0, bot);
+  cg.addColorStop(0, 'rgba(80,40,15,0.88)');
+  cg.addColorStop(0.3, 'rgba(50,22,8,0.92)');
+  cg.addColorStop(1, 'rgba(25,10,3,0.96)');
+  ctx.fillStyle = cg;
+  ctx.beginPath();
+  ctx.moveTo(cx - wTop, top);
+  ctx.lineTo(cx - wBot, bot);
+  ctx.quadraticCurveTo(cx, bot + 6, cx + wBot, bot);
+  ctx.lineTo(cx + wTop, top);
+  ctx.quadraticCurveTo(cx, top - 3, cx - wTop, top);
+  ctx.fill();
+
+  // Surface sheen
+  var sheenGrad = ctx.createRadialGradient(cx, top, 0, cx, top, wTop);
+  sheenGrad.addColorStop(0, 'rgba(255,210,160,0.18)');
+  sheenGrad.addColorStop(1, 'rgba(200,160,100,0)');
+  ctx.fillStyle = sheenGrad;
+  ctx.beginPath(); ctx.ellipse(cx, top, wTop - 2, 3, 0, 0, Math.PI*2); ctx.fill();
+
+  // Drip ring on surface
+  ctx.strokeStyle = 'rgba(200,150,80,0.25)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.ellipse(cx, top, wTop - 6, 2, 0, 0, Math.PI*2); ctx.stroke();
+}
+
+// ==========================================
+// SWIRL - bloom agitation
+// ==========================================
+
+function drawSwirl(ctx, cx, H, timer, total) {
+  var pStart = total * 0.44, pElapsed = Math.max(0, timer - pStart);
+  if (pElapsed < 3) return;
+  var y = H - 28 - 150 - 16 + 30;
+  var angle = timer * 0.08;
+  for (var i = 0; i < 4; i++) {
+    var a = angle + i * 1.57;
+    var sx = cx + Math.cos(a) * 14;
+    var sy = y + Math.sin(a * 0.6) * 3;
+    var alpha = 0.1 + Math.sin(timer * 0.15 + i) * 0.05;
+    ctx.fillStyle = 'rgba(190,170,140,' + alpha + ')';
+    ctx.beginPath(); ctx.arc(sx, sy, 2 + i * 0.8, 0, Math.PI*2); ctx.fill();
+  }
+}
+
+// ==========================================
+// STEAM - atmospheric steam particles
+// ==========================================
+
+function updateSteam(ctx, cx, H) {
+  var dripperTop = H - 28 - 150 - 16;
+
+  if (steamParticles.length < 55 && Math.random() < 0.55) {
+    steamParticles.push({
+      x: cx + (Math.random() - 0.5) * 55,
+      y: dripperTop + Math.random() * 12,
+      vx: (Math.random() - 0.5) * 0.4,
+      vy: -0.3 - Math.random() * 0.8,
+      life: 1,
+      size: 3 + Math.random() * 12,
+      opacity: 0.08 + Math.random() * 0.18
+    });
+  }
+
+  for (var i = steamParticles.length - 1; i >= 0; i--) {
+    var p = steamParticles[i];
+    p.x += p.vx + Math.sin(p.y * 0.015) * 0.4;
+    p.y += p.vy;
+    p.life -= 0.004;
+    p.size += 0.03;
+    if (p.life <= 0 || p.y < 30) { steamParticles.splice(i, 1); continue; }
+
+    var alpha = p.life * p.opacity;
+    var g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size);
+    g.addColorStop(0, 'rgba(225,225,230,' + alpha + ')');
+    g.addColorStop(0.5, 'rgba(210,210,218,' + (alpha * 0.55) + ')');
+    g.addColorStop(1, 'rgba(190,190,200,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill();
+  }
+}
+
+// ==========================================
+// DRIPS - coffee dripping from V60
+// ==========================================
+
+function updateDrips(ctx, cx, H, timer, total, activeStep) {
+  if (activeStep < 3 || activeStep > 4) return;
+  var dBot = H - 28 - 150 + 42;
+  var carafeTop = H - 28 - 150;
+  var carafeBot = H - 28;
+  var pourStart = total * 0.42;
+  var pourElapsed = Math.max(0, timer - pourStart);
+  if (pourElapsed < 6) return;
+
+  if (Math.random() < 0.35 && dripParticles.length < 20) {
+    dripParticles.push({
+      x: cx + (Math.random() - 0.5) * 6,
+      y: dBot,
+      vy: 0.5 + Math.random() * 2.5,
+      life: 1,
+      size: 1.2 + Math.random() * 3,
+      splashed: false
+    });
+  }
+
+  for (var i = dripParticles.length - 1; i >= 0; i--) {
+    var p = dripParticles[i];
+    if (p.splashed) {
+      p.x += p.vx || 0;
+      p.y += p.vy;
+      p.life -= 0.04;
+      if (p.life <= 0) { dripParticles.splice(i, 1); continue; }
+      ctx.fillStyle = 'rgba(100,50,20,' + p.life + ')';
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill();
+    } else {
+      p.y += p.vy;
+      p.vy += 0.1;
+      p.life -= 0.01;
+      if (p.y > carafeBot || p.life <= 0) {
+        if (p.y > carafeTop + 20) {
+          // Splash on hitting coffee surface
+          for (var s = 0; s < 3; s++) {
+            dripParticles.push({
+              x: p.x + (Math.random() - 0.5) * 10,
+              y: p.y,
+              vy: -1.5 - Math.random() * 2,
+              vx: (Math.random() - 0.5) * 2,
+              life: 0.3,
+              size: 1 + Math.random() * 1.5,
+              splashed: true
+            });
+          }
+        }
+        dripParticles.splice(i, 1);
+        continue;
+      }
+
+      // Main drop
+      var dropGrad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size);
+      dropGrad.addColorStop(0, 'rgba(110,55,25,' + p.life + ')');
+      dropGrad.addColorStop(1, 'rgba(70,30,10,' + (p.life * 0.5) + ')');
+      ctx.fillStyle = dropGrad;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill();
+
+      // Drop tail
+      ctx.fillStyle = 'rgba(85,38,12,' + (p.life * 0.4) + ')';
+      ctx.beginPath(); ctx.arc(p.x, p.y - p.size * 1.5, p.size * 0.5, 0, Math.PI*2); ctx.fill();
+    }
+  }
+}
+
+// ==========================================
+// FALLING - grounds falling from grinder
+// ==========================================
+
+function updateFalling(ctx, cx, H) {
+  for (var i = fallingParticles.length - 1; i >= 0; i--) {
+    var p = fallingParticles[i];
+    p.y += p.vy;
+    p.vy += 0.08;
+    p.life -= 0.02;
+    if (p.life <= 0) { fallingParticles.splice(i, 1); continue; }
+    ctx.fillStyle = 'rgba(80,40,20,' + p.life + ')';
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill();
+  }
+}
+
+// ==========================================
+// SERVE - pour from carafe to glass cup
+// ==========================================
+
+function drawServe(ctx, cx, H, timer, total) {
+  var pourStart = total * 0.92;
+  var serveElapsed = Math.max(0, timer - pourStart);
+  var servePhase = Math.min(serveElapsed / (total * 0.08), 1);
+  if (servePhase <= 0) servePhase = 0.01;
+
+  var glassX = cx + 75;
+  var glassY = H - 28;
+  var carafeTop = H - 28 - 150;
+
+  // === Glass Cup ===
+
+  // Shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ctx.beginPath(); ctx.ellipse(glassX, glassY + 4, 22, 4, 0, 0, Math.PI*2); ctx.fill();
 
   // Glass body
-  var gGrad = ctx.createLinearGradient(glassX-18, 0, glassX+18, 0);
-  gGrad.addColorStop(0, 'rgba(200,215,230,0.15)'); gGrad.addColorStop(0.5, 'rgba(235,245,255,0.28)');
-  gGrad.addColorStop(1, 'rgba(200,215,230,0.15)');
-  ctx.fillStyle = gGrad; ctx.strokeStyle = 'rgba(200,215,230,0.45)'; ctx.lineWidth = 2;
+  var gGrad = ctx.createLinearGradient(glassX - 20, 0, glassX + 20, 0);
+  gGrad.addColorStop(0, 'rgba(190,205,225,0.15)');
+  gGrad.addColorStop(0.3, 'rgba(225,240,252,0.30)');
+  gGrad.addColorStop(0.5, 'rgba(240,248,255,0.32)');
+  gGrad.addColorStop(0.7, 'rgba(225,240,252,0.30)');
+  gGrad.addColorStop(1, 'rgba(190,205,225,0.15)');
+  ctx.fillStyle = gGrad;
+  ctx.strokeStyle = 'rgba(190,210,230,0.5)'; ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(glassX-15, glassY-55); ctx.lineTo(glassX-18, glassY);
-  ctx.quadraticCurveTo(glassX, glassY+5, glassX+18, glassY);
-  ctx.lineTo(glassX+15, glassY-55); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.moveTo(glassX - 16, glassY - 58);
+  ctx.lineTo(glassX - 20, glassY);
+  ctx.quadraticCurveTo(glassX, glassY + 6, glassX + 20, glassY);
+  ctx.lineTo(glassX + 16, glassY - 58);
+  ctx.closePath();
+  ctx.fill(); ctx.stroke();
+
   // Rim
-  ctx.strokeStyle = 'rgba(200,215,230,0.55)'; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.ellipse(glassX, glassY-55, 16, 4, 0, 0, Math.PI*2); ctx.stroke();
-  // Base
-  ctx.fillStyle = 'rgba(200,215,230,0.2)'; roundRect(ctx, glassX-12, glassY+2, 24, 5, 2);
-  roundRect(ctx, glassX-15, glassY+5, 30, 3, 2);
+  ctx.strokeStyle = 'rgba(200,220,240,0.6)'; ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.ellipse(glassX, glassY - 58, 17, 5, 0, 0, Math.PI*2); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.ellipse(glassX, glassY - 59, 15, 3, 0, 0, Math.PI*2); ctx.stroke();
 
-  // Coffee in glass
+  // Glass base
+  ctx.fillStyle = 'rgba(200,215,230,0.25)';
+  roundRect(ctx, glassX - 14, glassY + 3, 28, 6, 3);
+  roundRect(ctx, glassX - 17, glassY + 7, 34, 3, 2);
+
+  // Handle
+  ctx.strokeStyle = 'rgba(190,210,230,0.4)'; ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(glassX + 14, glassY - 35);
+  ctx.quadraticCurveTo(glassX + 34, glassY - 30, glassX + 32, glassY - 10);
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // === Coffee filling glass ===
   if (servePhase > 0.1) {
-    var fillH = Math.min(servePhase*35, 35);
-    var coffeeTop = glassY-5-fillH;
-    ctx.fillStyle = 'rgba(40,18,5,0.9)'; ctx.beginPath();
-    var wAtTop = 15+(fillH/35)*3;
-    ctx.moveTo(glassX-wAtTop, coffeeTop);
-    ctx.lineTo(glassX-18, glassY);
-    ctx.quadraticCurveTo(glassX, glassY+4, glassX+18, glassY);
-    ctx.lineTo(glassX+wAtTop, coffeeTop);
-    ctx.quadraticCurveTo(glassX, coffeeTop-2, glassX-wAtTop, coffeeTop); ctx.fill();
-  }
+    var fillH = Math.min(servePhase * 40, 40);
+    var cTop = glassY - 5 - fillH;
+    var cwTop = 16 + (fillH / 40) * 4;
 
-  // Pouring stream from carafe to glass (during transition)
-  if (servePhase > 0.05 && servePhase < 0.9) {
-    var carafeSpoutX = cx - 42, carafeSpoutY = H - 50 - 140 + 8;
-    var glassRimX = glassX, glassRimY = glassY - 55;
-    ctx.strokeStyle = 'rgba(80,35,10,0.6)'; ctx.lineWidth = 3; ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.moveTo(carafeSpoutX, carafeSpoutY);
-    ctx.quadraticCurveTo((carafeSpoutX+glassRimX)/2, carafeSpoutY-15, glassRimX, glassRimY); ctx.stroke();
-  }
-
-  // Tilted carafe during serving
-  if (servePhase > 0.05 && servePhase < 0.95) {
-    ctx.save(); ctx.translate(cx, H-50-70);
-    ctx.rotate(-0.25 * servePhase);
-    ctx.fillStyle = 'rgba(200,220,240,0.15)'; ctx.strokeStyle = 'rgba(190,210,230,0.3)'; ctx.lineWidth = 2;
+    var cGrad = ctx.createLinearGradient(0, cTop, 0, glassY);
+    cGrad.addColorStop(0, 'rgba(90,50,20,0.9)');
+    cGrad.addColorStop(1, 'rgba(30,12,4,0.95)');
+    ctx.fillStyle = cGrad;
     ctx.beginPath();
-    ctx.moveTo(-26, -70); ctx.lineTo(-36, 70);
-    ctx.quadraticCurveTo(0, 76, 36, 70); ctx.lineTo(26, -70); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.moveTo(glassX - cwTop, cTop);
+    ctx.lineTo(glassX - 20, glassY);
+    ctx.quadraticCurveTo(glassX, glassY + 5, glassX + 20, glassY);
+    ctx.lineTo(glassX + cwTop, cTop);
+    ctx.quadraticCurveTo(glassX, cTop - 2, glassX - cwTop, cTop);
+    ctx.fill();
+
+    // Surface
+    ctx.fillStyle = 'rgba(200,140,80,0.2)';
+    ctx.beginPath(); ctx.ellipse(glassX, cTop, cwTop - 1, 2, 0, 0, Math.PI*2); ctx.fill();
+  }
+
+  // === Pouring stream from carafe ===
+  if (servePhase > 0.05 && servePhase < 0.92) {
+    var spoutX = cx - 44;
+    var spoutY = carafeTop + 10;
+    var targetX = glassX;
+    var targetY = glassY - 58;
+
+    ctx.strokeStyle = 'rgba(90,45,15,0.65)'; ctx.lineWidth = 3.5; ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(spoutX, spoutY);
+    ctx.quadraticCurveTo((spoutX + targetX) / 2, spoutY - 20, targetX, targetY);
+    ctx.stroke();
+
+    ctx.strokeStyle = 'rgba(120,65,30,0.35)'; ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    ctx.moveTo(spoutX - 2, spoutY + 1);
+    ctx.quadraticCurveTo((spoutX + targetX) / 2 - 3, spoutY - 16, targetX - 1, targetY);
+    ctx.stroke();
+  }
+
+  // === Tilted carafe ===
+  if (servePhase > 0.03 && servePhase < 0.96) {
+    ctx.save();
+    ctx.translate(cx, H - 28 - 75);
+    ctx.rotate(-0.28 * servePhase);
+
+    ctx.fillStyle = 'rgba(190,215,235,0.18)';
+    ctx.strokeStyle = 'rgba(180,200,220,0.35)'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-28, -75); ctx.lineTo(-38, 75);
+    ctx.quadraticCurveTo(0, 82, 38, 75);
+    ctx.lineTo(28, -75);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+
+    // Coffee inside tilted carafe
+    var remainingCoffee = 1 - servePhase;
+    if (remainingCoffee > 0.1) {
+      ctx.fillStyle = 'rgba(45,18,4,0.85)';
+      ctx.beginPath();
+      ctx.moveTo(-26, -30); ctx.lineTo(-36, 75);
+      ctx.quadraticCurveTo(0, 80, 36, 75);
+      ctx.lineTo(26, -30);
+      ctx.quadraticCurveTo(0, -35, -26, -30);
+      ctx.fill();
+    }
+
     ctx.restore();
   }
 }
 
 // ==========================================
-// MONOLOGUE (HTML player face + bubble)
+// MONOLOGUE SYSTEM
 // ==========================================
 
 function checkMonologue(timer) {
   if (!G.brewMonologues || !G.brewMonologues.length) return;
-  for (var i = G.brewMonologues.length-1; i >= 0; i--) {
+  for (var i = G.brewMonologues.length - 1; i >= 0; i--) {
     var m = G.brewMonologues[i];
     if (timer >= m.time && timer < m.time + 8) {
       if (activeMonologue !== m) {
@@ -568,17 +1029,19 @@ function showPlayerMonologue(m) {
   var face = document.getElementById('player-face');
   if (!wrap || !bubble || !face) return;
 
-  var positiveIcons = ['😊','😌','😎','🤩','☺️'];
-  var uncertainIcons = ['🤔','😅','😰','😬','🫣'];
+  var positiveIcons = ['😊', '😌', '😎', '🤩'];
+  var uncertainIcons = ['🤔', '😅', '😰', '😬'];
   var isPositive = m.icon === '✅' || m.icon === '💧' || m.icon === '⚙️' || m.icon === '😊';
   face.textContent = isPositive
-    ? positiveIcons[Math.floor(Math.random()*positiveIcons.length)]
-    : uncertainIcons[Math.floor(Math.random()*uncertainIcons.length)];
+    ? positiveIcons[Math.floor(Math.random() * positiveIcons.length)]
+    : uncertainIcons[Math.floor(Math.random() * uncertainIcons.length)];
 
   bubble.innerHTML = '<span class="mono-label">💭 内心独白</span>' + m.icon + ' ' + m.text;
 
   wrap.classList.add('visible');
-  face.classList.remove('reacting'); void face.offsetWidth; face.classList.add('reacting');
+  face.classList.remove('reacting');
+  void face.offsetWidth;
+  face.classList.add('reacting');
 }
 
 function hidePlayerMonologue() {
@@ -586,18 +1049,21 @@ function hidePlayerMonologue() {
   if (wrap) wrap.classList.remove('visible');
 }
 
-function updatePlayerMonologue(timer) {
-  checkMonologue(timer);
-}
-
 // ==========================================
 // HELPERS
 // ==========================================
 
-function roundRect(ctx, x, y, w, h, r) { ctx.beginPath(); roundRectPath(ctx, x, y, w, h, r); ctx.fill(); }
-function roundRectPath(ctx, x, y, w, h, r) {
-  ctx.moveTo(x+r, y); ctx.lineTo(x+w-r, y); ctx.quadraticCurveTo(x+w, y, x+w, y+r);
-  ctx.lineTo(x+w, y+h-r); ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
-  ctx.lineTo(x+r, y+h); ctx.quadraticCurveTo(x, y+h, x, y+h-r);
-  ctx.lineTo(x, y+r); ctx.quadraticCurveTo(x, y, x+r, y); ctx.closePath();
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+  ctx.fill();
 }
